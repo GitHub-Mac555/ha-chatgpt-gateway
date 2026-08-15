@@ -3,6 +3,7 @@ import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
 import { serviceCallSchema } from '../schemas/service.js';
 import { getEntityDomain, isDomainAllowed, isEntityAllowed } from '../security/authorization.js';
+import { invalidRequest } from '../http/errors.js';
 
 export async function registerServiceRoutes(
   app: FastifyInstance,
@@ -19,7 +20,7 @@ export async function registerServiceRoutes(
 
     const bodyResult = serviceCallSchema.safeParse(request.body);
     if (!bodyResult.success) {
-      return reply.code(400).send({ error: 'invalid_request', issues: bodyResult.error.issues });
+      return reply.code(400).send(invalidRequest(bodyResult.error.issues));
     }
 
     const input = bodyResult.data;
@@ -27,7 +28,24 @@ export async function registerServiceRoutes(
       return reply.code(403).send({ error: 'forbidden', message: 'Domain is not allowed.' });
     }
 
-    const entityIds = Array.isArray(input.entity_id) ? input.entity_id : [input.entity_id];
+    const unsupportedTargets = (['device_id', 'area_id', 'label_id'] as const).filter(
+      (key) => input.target?.[key]?.length,
+    );
+    if (unsupportedTargets.length > 0) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: `Unsupported target type: ${unsupportedTargets.join(', ')}. Use explicit entity_id targets.`,
+      });
+    }
+
+    const targetEntityIds = input.entity_id ?? input.target?.entity_id;
+    if (!targetEntityIds) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: 'An explicit entity_id target is required by the gateway policy.',
+      });
+    }
+    const entityIds = Array.isArray(targetEntityIds) ? targetEntityIds : [targetEntityIds];
 
     if (entityIds.some((entityId) => getEntityDomain(entityId) !== input.domain)) {
       return reply.code(400).send({
@@ -37,10 +55,12 @@ export async function registerServiceRoutes(
     }
 
     if (entityIds.some((entityId) => !isEntityAllowed(config, entityId))) {
-      return reply.code(403).send({ error: 'forbidden', message: 'One or more entities are not allowed.' });
+      return reply
+        .code(403)
+        .send({ error: 'forbidden', message: 'One or more entities are not allowed.' });
     }
 
-    const result = await client.callService(input);
+    const result = await client.callService({ ...input, entity_id: targetEntityIds });
     return { ok: true, result };
   });
 }

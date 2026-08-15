@@ -1,6 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
+import { z } from 'zod';
+import { invalidRequest } from '../http/errors.js';
+import { isEntityAllowed } from '../security/authorization.js';
+
+const serviceQuerySchema = z.object({
+  domain: z
+    .string()
+    .min(1)
+    .max(128)
+    .transform((value) => value.toLowerCase())
+    .optional(),
+});
 
 export async function registerSystemRoutes(
   app: FastifyInstance,
@@ -25,9 +37,15 @@ export async function registerSystemRoutes(
     };
   });
 
-  app.get('/api/v1/services', async (request) => {
-    const query = request.query as { domain?: string };
-    const requestedDomain = query.domain?.toLowerCase();
+  app.get('/api/v1/services', async (request, reply) => {
+    const parsedQuery = serviceQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.code(400).send(invalidRequest(parsedQuery.error.issues));
+    }
+    const requestedDomain = parsedQuery.data.domain;
+    if (requestedDomain && !config.allowedDomains.has(requestedDomain)) {
+      return reply.code(403).send({ error: 'forbidden', message: 'Domain is not allowed.' });
+    }
     const services = await client.getServices();
 
     return {
@@ -51,7 +69,59 @@ export async function registerSystemRoutes(
       },
       gateway: {
         read_only: config.readOnly,
+        rate_limit_enabled: config.rateLimitMax > 0,
       },
+    };
+  });
+
+  app.get('/api/v1/areas', async () => {
+    const [areas, devices, entities] = await Promise.all([
+      client.getAreas(),
+      client.getDevices(),
+      client.getEntityRegistry(),
+    ]);
+    const allowedDeviceIds = new Set(
+      entities
+        .filter((entity) => isEntityAllowed(config, entity.entity_id))
+        .flatMap((entity) => (entity.device_id ? [entity.device_id] : [])),
+    );
+    const allowedAreaIds = new Set(
+      entities
+        .filter((entity) => isEntityAllowed(config, entity.entity_id))
+        .flatMap((entity) => (entity.area_id ? [entity.area_id] : [])),
+    );
+    for (const device of devices) {
+      if (allowedDeviceIds.has(device.id) && device.area_id) {
+        allowedAreaIds.add(device.area_id);
+      }
+    }
+    return {
+      areas: areas
+        .filter((area) => allowedAreaIds.has(area.area_id))
+        .map((area) => ({ area_id: area.area_id, name: area.name, aliases: area.aliases ?? [] })),
+    };
+  });
+
+  app.get('/api/v1/devices', async () => {
+    const [devices, entities] = await Promise.all([
+      client.getDevices(),
+      client.getEntityRegistry(),
+    ]);
+    const allowedDeviceIds = new Set(
+      entities
+        .filter((entity) => isEntityAllowed(config, entity.entity_id))
+        .flatMap((entity) => (entity.device_id ? [entity.device_id] : [])),
+    );
+    return {
+      devices: devices
+        .filter((device) => allowedDeviceIds.has(device.id))
+        .map((device) => ({
+          id: device.id,
+          area_id: device.area_id ?? null,
+          name: device.name_by_user ?? device.name ?? null,
+          manufacturer: device.manufacturer ?? null,
+          model: device.model ?? null,
+        })),
     };
   });
 }

@@ -49,3 +49,29 @@ export interface ServiceCallRequest {
   entity_id: string | string[];
   data?: Record<string, unknown>;
 }
+
+export interface HomeAssistantArea {
+  area_id: string;
+  name: string;
+  aliases?: string[];
+}
+
+export interface HomeAssistantDevice {
+  id: string;
+  area_id?: string | null;
+  name_by_user?: string | null;
+  name?: string | null;
+  manufacturer?: string | null;
+  model?: string | null;
+  disabled_by?: string | null;
+}
+
+export interface HomeAssistantEntityRegistryEntry {
+  entity_id: string;
+  device_id?: string | null;
+  area_id?: string | null;
+  name?: string | null;
+  original_name?: string | null;
+  disabled_by?: string | null;
+  hidden_by?: string | null;
+}

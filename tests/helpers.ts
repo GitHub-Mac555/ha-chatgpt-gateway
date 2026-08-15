@@ -10,12 +10,33 @@ export function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     allowedEntities: new Set(),
     readOnly: false,
     logLevel: 'silent',
+    homeAssistantTimeoutMs: 10_000,
+    rateLimitMax: 0,
+    rateLimitWindowMs: 60_000,
     ...overrides,
   };
 }
 
 export const sampleStates = [
-  { entity_id: 'light.living_room', state: 'on', attributes: { friendly_name: 'Living room' }, last_changed: '2026-08-15T10:00:00+00:00', last_updated: '2026-08-15T10:00:00+00:00' },
-  { entity_id: 'switch.coffee_machine', state: 'off', attributes: { friendly_name: 'Coffee machine' }, last_changed: '2026-08-15T10:00:00+00:00', last_updated: '2026-08-15T10:00:00+00:00' },
-  { entity_id: 'lock.front_door', state: 'locked', attributes: { friendly_name: 'Front door' }, last_changed: '2026-08-15T10:00:00+00:00', last_updated: '2026-08-15T10:00:00+00:00' },
+  {
+    entity_id: 'light.living_room',
+    state: 'on',
+    attributes: { friendly_name: 'Living room' },
+    last_changed: '2026-08-15T10:00:00+00:00',
+    last_updated: '2026-08-15T10:00:00+00:00',
+  },
+  {
+    entity_id: 'switch.coffee_machine',
+    state: 'off',
+    attributes: { friendly_name: 'Coffee machine' },
+    last_changed: '2026-08-15T10:00:00+00:00',
+    last_updated: '2026-08-15T10:00:00+00:00',
+  },
+  {
+    entity_id: 'lock.front_door',
+    state: 'locked',
+    attributes: { friendly_name: 'Front door' },
+    last_changed: '2026-08-15T10:00:00+00:00',
+    last_updated: '2026-08-15T10:00:00+00:00',
+  },
 ];

@@ -1,16 +1,22 @@
 import Fastify, { type FastifyInstance } from 'fastify';
 import type { GatewayConfig } from './config/env.js';
-import { HomeAssistantClient, HomeAssistantError } from './home-assistant/client.js';
+import {
+  HomeAssistantClient,
+  HomeAssistantError,
+  type WebSocketFactory,
+} from './home-assistant/client.js';
 import { buildOpenApiSchema } from './openapi/action-schema.js';
 import { registerEntityRoutes } from './routes/entities.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerServiceRoutes } from './routes/services.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { createAuthenticationHook } from './security/authentication.js';
+import { createRateLimitHook } from './security/rate-limit.js';
 
 export interface BuildAppOptions {
   config: GatewayConfig;
   fetchImpl?: typeof fetch;
+  webSocketFactory?: WebSocketFactory;
   logger?: boolean;
 }
 
@@ -20,14 +26,28 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     bodyLimit: 1024 * 1024,
   });
 
-  const client = new HomeAssistantClient(options.config, options.fetchImpl);
+  const client = new HomeAssistantClient(
+    options.config,
+    options.fetchImpl,
+    options.webSocketFactory,
+  );
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof HomeAssistantError) {
-      const statusCode = error.statusCode === 404 ? 404 : 502;
+      const statusCode = error.statusCode === 404 ? 404 : error.kind === 'http' ? 502 : 503;
       return reply.code(statusCode).send({
-        error: 'home_assistant_error',
-        message: error.message,
+        error:
+          statusCode === 503
+            ? 'home_assistant_unavailable'
+            : statusCode === 404
+              ? 'not_found'
+              : 'home_assistant_error',
+        message:
+          statusCode === 404
+            ? 'The requested Home Assistant resource was not found.'
+            : statusCode === 503
+              ? 'Home Assistant is currently unavailable.'
+              : 'Home Assistant returned an unexpected response.',
       });
     }
 
@@ -44,6 +64,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   await app.register(async (protectedApp) => {
     protectedApp.addHook('onRequest', createAuthenticationHook(options.config));
+    protectedApp.addHook('onRequest', createRateLimitHook(options.config));
     await registerEntityRoutes(protectedApp, options.config, client);
     await registerServiceRoutes(protectedApp, options.config, client);
     await registerSystemRoutes(protectedApp, options.config, client);
