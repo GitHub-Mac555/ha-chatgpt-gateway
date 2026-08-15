@@ -119,6 +119,8 @@ GET  /api/v1/devices
 GET  /api/v1/entities
 GET  /api/v1/entities/{entityId}
 GET  /api/v1/entities/{entityId}/state
+GET  /api/v1/entities/{entityId}/history
+GET  /api/v1/automations/{entityId}
 
 POST /api/v1/services/call
 ```
@@ -181,6 +183,15 @@ The equivalent structured form is also accepted:
 
 The service name itself is not hard-coded: the gateway forwards an authorized service call to Home Assistant. `/api/v1/services` can be used to discover the services currently exposed by the configured Home Assistant instance, filtered to allowed domains.
 
+## History and automation analysis
+
+The gateway exposes bounded, read-only analysis endpoints without becoming a general Home Assistant proxy:
+
+- `GET /api/v1/entities/{entityId}/history` returns minimal state history for one allowed entity. Pass an ISO-8601 `start_time` and optional `end_time`; the interval is limited to 31 days, attributes are omitted, and responses are evenly sampled to 1,000 points by default (up to 5,000).
+- `GET /api/v1/automations/{entityId}` returns the configuration of one allowed `automation.*` entity. It redacts values whose keys indicate tokens, passwords, API keys, Authorization data, secrets, or webhooks.
+
+To analyse an appliance's consumption, add its specific energy and power sensor IDs to `ALLOWED_ENTITIES` and permit the `sensor` domain. To inspect its schedule, add only the related `automation.*` IDs and permit `automation`. These endpoints are read-only; enabling a domain does not bypass the entity allow-list for service calls.
+
 ## Read-only mode
 
 For an initial deployment, start with:
@@ -222,6 +233,7 @@ See [docs/chatgpt-action.md](docs/chatgpt-action.md).
 ## Deployment guides
 
 - [Home Assistant token and connectivity](docs/home-assistant.md)
+- [Docker and Docker Compose installation](docs/docker.md)
 - [NAS / Synology Docker deployment example](docs/nas-docker.md)
 - [Reverse proxy, HTTPS, and router port forwarding](docs/reverse-proxy.md)
 - [ChatGPT GPT and Action configuration](docs/chatgpt-action.md)

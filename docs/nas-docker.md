@@ -1,6 +1,6 @@
 # NAS Docker deployment example
 
-This example applies to Synology Container Manager and to other NAS systems that provide Docker Compose. It uses the published GHCR image, so the NAS does not need Node.js or a local source build.
+This example applies to Synology Container Manager and to other NAS systems that provide Docker Compose. It uses the published GHCR image, so the NAS does not need Node.js or a local source build. For the full `docker run` and Compose reference, see [docker.md](docker.md).
 
 ## Before starting
 

@@ -8,7 +8,7 @@ describe('health and OpenAPI', () => {
     const app = await buildApp({ config: makeConfig(), logger: false });
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok', version: '0.2.0', readOnly: false });
+    expect(response.json()).toEqual({ status: 'ok', version: '0.3.0', readOnly: false });
     await app.close();
   });
 
@@ -19,6 +19,8 @@ describe('health and OpenAPI', () => {
     expect(response.json().openapi).toBe('3.1.0');
     expect(response.json().paths['/api/v1/services/call']).toBeDefined();
     expect(response.json().paths['/api/v1/areas']).toBeDefined();
+    expect(response.json().paths['/api/v1/entities/{entityId}/history']).toBeDefined();
+    expect(response.json().paths['/api/v1/automations/{entityId}']).toBeDefined();
     expect(response.json().paths['/api/v1/entities/{entityId}'].get.parameters).toEqual([
       expect.objectContaining({ name: 'entityId', in: 'path', required: true }),
     ]);

@@ -41,6 +41,8 @@ You are a careful Home Assistant assistant. Use only the configured HA ChatGPT G
 
 Before controlling a device, discover the relevant entity and available service when they are not already known in the current conversation. Use areas and devices to resolve room requests, then act only on an explicit entity_id returned by the gateway.
 
+For evidence-based energy questions, discover the appliance's power and energy sensors, inspect only the relevant allowed automation configurations, and request the bounded history for each sensor using explicit ISO-8601 start and end times. Check total_points, returned_points, and sampled before interpreting the result. Base conclusions on kWh totals across comparable time periods; do not invent data or infer consumption from a single power spike.
+
 For lighting requests, search both the light and switch domains: some physical lamps are represented as switches. Do not describe DND-mode or configuration entities as ordinary lights. Clearly mention unavailable entities instead of treating them as off.
 
 For a request that could affect more than one device, summarize the exact target entities and ask a short clarification unless the user clearly named all intended devices. Do not issue domain-wide, area-wide, device-wide, label-wide, or target-less service calls.
@@ -56,9 +58,11 @@ For state-changing actions, briefly state what you are going to do, call the act
 2. Ask it to list entities in `light`, then `switch`.
 3. Ask it to read one chosen harmless device's state.
 4. Ask it to list services for that device's domain.
-5. With `READ_ONLY=true`, confirm that a write request is blocked.
-6. Add a strict `ALLOWED_ENTITIES` list, change to `READ_ONLY=false`, and test one observed on/off action.
-7. Re-read the state and check the container log if ChatGPT reports an ambiguous result.
+5. For an allowed sensor, request a short history interval and confirm the returned points are plausible.
+6. For an allowed automation, read its redacted configuration and confirm that it contains no credential values.
+7. With `READ_ONLY=true`, confirm that a write request is blocked.
+8. Add a strict `ALLOWED_ENTITIES` list, change to `READ_ONLY=false`, and test one observed on/off action.
+9. Re-read the state and check the container log if ChatGPT reports an ambiguous result.
 
 ## Troubleshooting
 
