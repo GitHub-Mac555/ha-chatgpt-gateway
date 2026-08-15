@@ -1,51 +1,80 @@
-# Public HTTPS endpoint
+# Public HTTPS, reverse proxy, and router forwarding
 
-ChatGPT GPT Actions require the OpenAPI server URL to be under the imported HTTPS origin. Use standard HTTPS on port `443`; do not use a non-standard port such as `:5153` in `PUBLIC_BASE_URL` or the Action import URL.
-
-A ChatGPT GPT Action must reach the gateway through a public HTTPS URL. The gateway itself listens on HTTP on its local Docker port; terminate TLS with the existing Synology Reverse Proxy, Nginx, Nginx Proxy Manager, Caddy, Traefik, or a secure tunnel.
-
-Create one virtual host such as `gateway.example.com` that forwards HTTPS traffic to `http://127.0.0.1:8787` (or the NAS LAN address and mapped port). Preserve the `Authorization` header, do not cache API responses, and restrict the proxy route to this gateway only.
-
-## Router port forwarding
-
-Forward the **HTTPS listener of the reverse proxy**, not the Docker port. A safe example for a NAS at `192.168.100.105` is:
-
-| Router field      | Value             |
-| ----------------- | ----------------- |
-| Protocol          | TCP               |
-| WAN/external port | `443`             |
-| LAN destination   | `192.168.100.105` |
-| LAN/internal port | `443`             |
-
-Do **not** forward `8787` (the gateway's plain HTTP Docker port) and do **not** forward Home Assistant port `8123`. Check that the NAS has a fixed DHCP lease/static LAN address, and that the Internet connection has a public IPv4 address rather than CGNAT. Test the final URL from mobile data or another external network, not only from the home Wi-Fi.
-
-For the Synology setup above, create this rule in **Control Panel → Login Portal → Advanced → Reverse Proxy**:
-
-| Setting              | Value                                                     |
-| -------------------- | --------------------------------------------------------- |
-| Source protocol      | HTTPS                                                     |
-| Source hostname      | the public DNS name, for example `ferendeles.synology.me` |
-| Source port          | `443`                                                     |
-| Destination protocol | HTTP                                                      |
-| Destination hostname | `127.0.0.1`                                               |
-| Destination port     | `8787`                                                    |
-
-Assign a valid certificate for the source hostname in **Control Panel → Security → Certificate**. If a distinct subdomain is available, prefer it (for example `ha-gateway.example.com`). Do not overwrite or delete existing reverse-proxy rules for other services.
-
-Do not make Home Assistant port 8123 public for this integration. The intended path is:
+A ChatGPT GPT Action must reach the gateway through a public HTTPS origin. Terminate TLS at a reverse proxy and forward only to the local gateway port. Do not publish the gateway's plain HTTP Docker port or Home Assistant itself.
 
 ```text
-Internet -> HTTPS reverse proxy -> HA ChatGPT Gateway :8787 -> LAN -> Home Assistant :8123
+Internet -> HTTPS reverse proxy :443 -> HA ChatGPT Gateway :8787 -> LAN -> Home Assistant :8123
 ```
 
-Verify both the certificate and reachability after configuration:
+Use a dedicated subdomain where possible, for example `ha-gateway.example.com`. Configure `PUBLIC_BASE_URL=https://ha-gateway.example.com` and restart the gateway. ChatGPT requires the OpenAPI server URL to match the imported HTTPS origin, so use standard HTTPS port `443` and no port suffix.
+
+## Reverse-proxy target
+
+Create one virtual host that accepts:
+
+```text
+https://ha-gateway.example.com:443
+```
+
+and forwards it to:
+
+```text
+http://127.0.0.1:8787
+```
+
+or to the Docker host's LAN address and mapped port when the proxy runs on another machine. Preserve the `Authorization` header, disable caching for API responses, and do not reuse or overwrite an unrelated proxy rule. Assign a valid certificate to the public hostname.
+
+This works with Synology Reverse Proxy, Nginx, Nginx Proxy Manager, Caddy, Traefik, or an equivalent secure ingress. The exact UI differs, but the source/destination rule is the same.
+
+### Synology Reverse Proxy example
+
+In **Control Panel → Login Portal → Advanced → Reverse Proxy**, add a new rule:
+
+| Setting              | Value                    |
+| -------------------- | ------------------------ |
+| Source protocol      | HTTPS                    |
+| Source hostname      | `ha-gateway.example.com` |
+| Source port          | `443`                    |
+| Destination protocol | HTTP                     |
+| Destination hostname | `127.0.0.1`              |
+| Destination port     | `8787`                   |
+
+In **Control Panel → Security → Certificate**, assign a valid certificate for `ha-gateway.example.com`. Do not expose Home Assistant port `8123` merely to support this gateway.
+
+## Router port-forwarding scenarios
+
+Port forwarding is necessary **only** when the public HTTPS reverse proxy is hosted on the NAS/Docker host and the router is the Internet edge. It is not needed when using a secure outbound tunnel or a managed reverse proxy that does not require inbound connections.
+
+### Scenario A: public IP, NAS hosts the reverse proxy
+
+Give the NAS a fixed DHCP lease or static LAN address, then create exactly one router rule:
+
+| Router field        | Example value  |
+| ------------------- | -------------- |
+| Protocol            | TCP            |
+| WAN / external port | `443`          |
+| LAN destination     | `192.168.1.50` |
+| LAN / internal port | `443`          |
+
+Forward the **reverse proxy's HTTPS listener**, not Docker port `8787`. Never forward `8123` for this integration. Remove obsolete experimental gateway rules, such as a prior `5153 → 5153` rule, once the port-443 setup is verified.
+
+If another service already occupies port 443 on the NAS, add a hostname-based route to its existing reverse proxy instead of creating a second listener. If the router cannot forward 443 because the ISP blocks it, prefer an outbound tunnel or a reverse-proxy service that supports standard HTTPS rather than importing a non-standard port into the GPT Action.
+
+### Scenario B: CGNAT or no public IPv4
+
+Router forwarding will not work behind CGNAT. Typical signs are a router WAN address in a private/reserved range or a WAN address that differs from the public IP shown by an external service. Use an outbound HTTPS tunnel, a VPS reverse proxy, or ask the ISP for a public IP. Keep the same public-origin and TLS requirements.
+
+### Scenario C: secure outbound tunnel
+
+With a tunnel such as Cloudflare Tunnel or another authenticated outbound tunnel, no inbound router rule is required. Configure the tunnel's public hostname to reach the local reverse proxy or gateway, retain HTTPS at the public hostname, and keep `PUBLIC_BASE_URL` equal to that public origin. Apply the tunnel provider's access controls in addition to the gateway key.
+
+## Verification
+
+From mobile data or another external network, not only home Wi-Fi:
 
 ```bash
-curl --fail --silent --show-error https://gateway.example.com/openapi.json
+curl --fail --silent --show-error https://ha-gateway.example.com/health
+curl --fail --silent --show-error https://ha-gateway.example.com/openapi.json
 ```
 
-The public import URL is:
-
-```text
-https://ferendeles.synology.me/openapi.json
-```
+Confirm that the certificate is trusted, `/openapi.json` is valid JSON, and it advertises the same `https://ha-gateway.example.com` origin. Do not test a service call with a lock, alarm, door, gate, or other safety-critical entity.

@@ -11,13 +11,29 @@
 
 - use HTTPS for every public request;
 - generate a long random `GATEWAY_API_KEY`;
-- start with `READ_ONLY=true`;
-- keep `ALLOWED_DOMAINS` minimal;
-- use `ALLOWED_ENTITIES` for a strict entity allowlist when practical;
+- start with `READ_ONLY=true`, `ALLOWED_DOMAINS=light,switch`, and an empty allow-list only long enough to discover devices;
+- then use `ALLOWED_ENTITIES` for a strict, short entity allow-list before enabling writes;
 - avoid exposing sensitive domains such as `lock` and `alarm_control_panel` by default;
 - keep `.env` out of version control;
 - run the container as an unprivileged user;
 - do not expose Home Assistant itself merely to make this gateway work.
+
+## Safe rollout sequence
+
+1. Keep `READ_ONLY=true` and expose only `light,switch` for discovery.
+2. List entities and select one to three harmless, reversible devices. A lamp or an isolated test plug is a good first choice.
+3. Set `ALLOWED_ENTITIES` to those exact entity IDs and restart the container.
+4. Test state reads, then one on/off cycle while physically observing the device.
+5. Set `READ_ONLY=false` only after those tests pass.
+6. Add devices one at a time. Keep an allow-list permanently rather than relying on a broad domain policy.
+
+Avoid initially authorizing the following, even if their entity IDs are in an otherwise common domain:
+
+- door, gate, garage, shutter, or blind controls;
+- alarm, lock, camera, presence, and security-related entities;
+- climate/heating controls and appliances;
+- scripts and scenes, because their internal effects can be broader than their names suggest;
+- plugs powering a NAS, router, Home Assistant host, medical device, or other critical equipment.
 
 ## Policy details
 
