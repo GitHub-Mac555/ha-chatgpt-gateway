@@ -22,6 +22,7 @@ const envSchema = z.object({
   HOME_ASSISTANT_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(10_000),
   RATE_LIMIT_MAX: z.coerce.number().int().min(0).max(10_000).default(120),
   RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
+  PUBLIC_BASE_URL: z.string().url().optional(),
 });
 
 export interface GatewayConfig {
@@ -36,6 +37,7 @@ export interface GatewayConfig {
   homeAssistantTimeoutMs: number;
   rateLimitMax: number;
   rateLimitWindowMs: number;
+  publicBaseUrl?: string;
 }
 
 function parseCsv(value: string): ReadonlySet<string> {
@@ -67,5 +69,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     homeAssistantTimeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS,
     rateLimitMax: parsed.RATE_LIMIT_MAX,
     rateLimitWindowMs: parsed.RATE_LIMIT_WINDOW_MS,
+    publicBaseUrl: parsed.PUBLIC_BASE_URL?.replace(/\/$/, ''),
   };
 }

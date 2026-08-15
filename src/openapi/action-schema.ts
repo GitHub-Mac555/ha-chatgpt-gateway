@@ -9,7 +9,7 @@ const errorResponses = {
   '503': { description: 'Home Assistant is unavailable or timed out' },
 };
 
-export function buildOpenApiSchema() {
+export function buildOpenApiSchema(publicBaseUrl?: string) {
   return {
     openapi: '3.1.0',
     info: {
@@ -18,6 +18,7 @@ export function buildOpenApiSchema() {
       description:
         'A policy-enforced self-hosted REST gateway for a ChatGPT GPT Action. Use only this API; never send Home Assistant credentials to it.',
     },
+    ...(publicBaseUrl ? { servers: [{ url: publicBaseUrl }] } : {}),
     security: [{ bearerAuth: [] }],
     paths: {
       '/health': {

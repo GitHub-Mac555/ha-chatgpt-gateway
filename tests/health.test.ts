@@ -24,4 +24,14 @@ describe('health and OpenAPI', () => {
     await expect(SwaggerParser.validate(response.json())).resolves.toBeDefined();
     await app.close();
   });
+
+  it('advertises the configured public URL for GPT Action imports', async () => {
+    const app = await buildApp({
+      config: makeConfig({ publicBaseUrl: 'https://gateway.example.com' }),
+      logger: false,
+    });
+    const response = await app.inject({ method: 'GET', url: '/openapi.json' });
+    expect(response.json().servers).toEqual([{ url: 'https://gateway.example.com' }]);
+    await app.close();
+  });
 });
