@@ -10,3 +10,13 @@
 The action should discover entities/services before making assumptions. For area-oriented requests, it can use `listHomeAssistantAreas` and `listHomeAssistantDevices`, then resolve to explicit allowed entity IDs before `callHomeAssistantService`.
 
 The schema intentionally does not contain a `servers` entry. This lets the GPT Action retain the HTTPS base URL supplied during import and avoids publishing an internal hostname.
+
+## Example with a Synology reverse proxy
+
+After the router and reverse-proxy setup described in [reverse-proxy.md](reverse-proxy.md), import the exact public URL, including a non-standard HTTPS port if one is used:
+
+```text
+https://ferendeles.synology.me:5153/openapi.json
+```
+
+Before saving the GPT, open the URL from an external network and confirm that it returns valid JSON over TLS. Then test the Action in this order: entity discovery, an entity state read, service discovery, and finally an approved service call. Never place the Home Assistant token in the Action authentication settings.
