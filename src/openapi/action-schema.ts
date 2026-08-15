@@ -9,6 +9,13 @@ const errorResponses = {
   '503': { description: 'Home Assistant is unavailable or timed out' },
 };
 
+const entityIdParameter = {
+  name: 'entityId',
+  in: 'path',
+  required: true,
+  schema: { type: 'string', examples: ['light.living_room'] },
+};
+
 export function buildOpenApiSchema(publicBaseUrl?: string) {
   return {
     openapi: '3.1.0',
@@ -85,7 +92,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
         get: {
           operationId: 'getHomeAssistantEntity',
           summary: 'Get full state and attributes for one allowed entity',
-          parameters: [{ $ref: '#/components/parameters/EntityId' }],
+          parameters: [entityIdParameter],
           responses: {
             '200': {
               description: 'Entity state',
@@ -102,7 +109,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
         get: {
           operationId: 'getHomeAssistantEntityState',
           summary: 'Get only current state and timestamps for one allowed entity',
-          parameters: [{ $ref: '#/components/parameters/EntityId' }],
+          parameters: [entityIdParameter],
           responses: {
             '200': { description: 'Entity state summary' },
             '404': { description: 'Entity not found' },
@@ -164,14 +171,6 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           scheme: 'bearer',
           bearerFormat: 'API key',
           description: 'Use the GATEWAY_API_KEY only. Do not use a Home Assistant token.',
-        },
-      },
-      parameters: {
-        EntityId: {
-          name: 'entityId',
-          in: 'path',
-          required: true,
-          schema: { type: 'string', examples: ['light.living_room'] },
         },
       },
       schemas: {

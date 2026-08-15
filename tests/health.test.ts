@@ -19,6 +19,9 @@ describe('health and OpenAPI', () => {
     expect(response.json().openapi).toBe('3.1.0');
     expect(response.json().paths['/api/v1/services/call']).toBeDefined();
     expect(response.json().paths['/api/v1/areas']).toBeDefined();
+    expect(response.json().paths['/api/v1/entities/{entityId}'].get.parameters).toEqual([
+      expect.objectContaining({ name: 'entityId', in: 'path', required: true }),
+    ]);
     expect(JSON.stringify(response.json())).not.toContain('HOME_ASSISTANT_TOKEN');
     expect(JSON.stringify(response.json())).not.toContain('ha-test-token');
     await expect(SwaggerParser.validate(response.json())).resolves.toBeDefined();

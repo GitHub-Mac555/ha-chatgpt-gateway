@@ -1,6 +1,6 @@
 # ChatGPT GPT Action setup
 
-1. Deploy the gateway behind a public HTTPS endpoint. Set `PUBLIC_BASE_URL` to its externally reachable HTTPS origin, for example `https://gateway.example.com`, then restart the gateway. This adds the public OpenAPI `servers` URL required by action clients.
+1. Deploy the gateway behind a public HTTPS endpoint on the standard port `443`. Set `PUBLIC_BASE_URL` to its externally reachable HTTPS origin, for example `https://gateway.example.com` (without a port suffix), then restart the gateway. This adds the public OpenAPI `servers` URL required by action clients.
 2. In the GPT editor, create or edit a personal GPT, open **Actions**, and import that OpenAPI URL.
 3. Keep the imported authentication scheme as HTTP Bearer. Enter the value of `GATEWAY_API_KEY` as the action secret.
 4. Do not enter `HOME_ASSISTANT_TOKEN` anywhere in ChatGPT. It is an internal gateway-to-Home-Assistant credential.
