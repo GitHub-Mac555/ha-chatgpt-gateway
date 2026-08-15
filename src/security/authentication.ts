@@ -14,7 +14,10 @@ function safeEqual(left: string, right: string): boolean {
 }
 
 export function createAuthenticationHook(config: GatewayConfig) {
-  return async function authenticate(request: FastifyRequest, reply: FastifyReply): Promise<FastifyReply | void> {
+  return async function authenticate(
+    request: FastifyRequest,
+    reply: FastifyReply,
+  ): Promise<FastifyReply | void> {
     const authorization = request.headers.authorization;
     const [scheme, token] = authorization?.split(' ') ?? [];
 

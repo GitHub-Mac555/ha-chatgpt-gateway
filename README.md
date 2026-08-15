@@ -24,6 +24,7 @@ Home Assistant REST API
 - Zod validation
 - OpenAPI 3.1 schema suitable for GPT Actions
 - Home Assistant state and service discovery
+- Area and device discovery scoped to allowed entities
 - Generic Home Assistant service calls
 - Domain and entity allow-lists
 - Optional read-only mode
@@ -73,16 +74,19 @@ curl http://localhost:8787/health
 
 All runtime configuration is provided through environment variables.
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `8787` | HTTP port used inside the container |
-| `HOME_ASSISTANT_URL` | `http://homeassistant.local:8123` | Home Assistant base URL |
-| `HOME_ASSISTANT_TOKEN` | required | Home Assistant Long-Lived Access Token |
-| `GATEWAY_API_KEY` | required | Secret used by the GPT Action to authenticate to the gateway |
-| `ALLOWED_DOMAINS` | `light,switch,scene,script,climate,cover` | Comma-separated Home Assistant domains exposed by the gateway |
-| `ALLOWED_ENTITIES` | empty | Optional comma-separated entity allow-list. Empty means every entity in the allowed domains |
-| `READ_ONLY` | `false` | When `true`, blocks service calls while keeping read operations available |
-| `LOG_LEVEL` | `info` | Fastify/Pino log level |
+| Variable                    | Default                           | Description                                                                                 |
+| --------------------------- | --------------------------------- | ------------------------------------------------------------------------------------------- |
+| `PORT`                      | `8787`                            | HTTP port used inside the container                                                         |
+| `HOME_ASSISTANT_URL`        | `http://homeassistant.local:8123` | Home Assistant base URL                                                                     |
+| `HOME_ASSISTANT_TOKEN`      | required                          | Home Assistant Long-Lived Access Token                                                      |
+| `GATEWAY_API_KEY`           | required                          | Secret used by the GPT Action to authenticate to the gateway                                |
+| `ALLOWED_DOMAINS`           | required                          | Comma-separated Home Assistant domains exposed by the gateway                               |
+| `ALLOWED_ENTITIES`          | empty                             | Optional comma-separated entity allow-list. Empty means every entity in the allowed domains |
+| `READ_ONLY`                 | `false`                           | When `true`, blocks service calls while keeping read operations available                   |
+| `LOG_LEVEL`                 | `info`                            | Fastify/Pino log level                                                                      |
+| `HOME_ASSISTANT_TIMEOUT_MS` | `10000`                           | Timeout for each REST or internal WebSocket request to Home Assistant                       |
+| `RATE_LIMIT_MAX`            | `120`                             | Requests per source IP in the rate-limit window; `0` disables the in-memory limiter         |
+| `RATE_LIMIT_WINDOW_MS`      | `60000`                           | Rate-limit window in milliseconds                                                           |
 
 See `.env.example` for the complete template.
 
@@ -97,6 +101,8 @@ GET  /openapi.json
 GET  /api/v1/config
 GET  /api/v1/diagnostics
 GET  /api/v1/services
+GET  /api/v1/areas
+GET  /api/v1/devices
 
 GET  /api/v1/entities
 GET  /api/v1/entities/{entityId}
@@ -142,14 +148,24 @@ Multiple entities are also supported:
 {
   "domain": "light",
   "service": "turn_off",
-  "entity_id": [
-    "light.living_room",
-    "light.kitchen"
-  ]
+  "entity_id": ["light.living_room", "light.kitchen"]
 }
 ```
 
 Every target entity must pass the configured policy. Domain-wide service calls without an explicit `entity_id` are deliberately rejected.
+
+The equivalent structured form is also accepted:
+
+```json
+{
+  "domain": "light",
+  "service": "turn_on",
+  "target": { "entity_id": ["light.living_room", "light.kitchen"] },
+  "data": { "brightness_pct": 50 }
+}
+```
+
+`device_id`, `area_id`, `label_id`, and target-less/global calls are deliberately refused in v0.2.0. An entity allow-list cannot safely prove the scope of those targets, so callers must first use entity, area, and device discovery and then send the explicit allowed entity IDs.
 
 The service name itself is not hard-coded: the gateway forwards an authorized service call to Home Assistant. `/api/v1/services` can be used to discover the services currently exposed by the configured Home Assistant instance, filtered to allowed domains.
 
@@ -266,7 +282,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.1.0` is the initial functional baseline. It focuses on a small public REST API suitable for a GPT Action. Home Assistant WebSocket support may be added internally where it provides a concrete benefit, while keeping the public GPT Action surface HTTPS/REST based.
+`v0.2.0` is a complete, policy-enforced operational baseline. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
 
 ## License
 

@@ -4,7 +4,7 @@ services:
     container_name: ha-chatgpt-gateway
     restart: unless-stopped
     ports:
-      - "${PORT:-8787}:${PORT:-8787}"
+      - '${PORT:-8787}:${PORT:-8787}'
     env_file:
       - .env
     security_opt:
