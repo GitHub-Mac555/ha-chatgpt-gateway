@@ -8,6 +8,7 @@ import {
 import { buildOpenApiSchema } from './openapi/action-schema.js';
 import { registerEntityRoutes } from './routes/entities.js';
 import { registerHealthRoute } from './routes/health.js';
+import { registerHistoryRoutes } from './routes/history.js';
 import { registerServiceRoutes } from './routes/services.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { createAuthenticationHook } from './security/authentication.js';
@@ -66,6 +67,7 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
     protectedApp.addHook('onRequest', createAuthenticationHook(options.config));
     protectedApp.addHook('onRequest', createRateLimitHook(options.config));
     await registerEntityRoutes(protectedApp, options.config, client);
+    await registerHistoryRoutes(protectedApp, options.config, client);
     await registerServiceRoutes(protectedApp, options.config, client);
     await registerSystemRoutes(protectedApp, options.config, client);
   });

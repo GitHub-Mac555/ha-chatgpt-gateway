@@ -117,6 +117,52 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           },
         },
       },
+      '/api/v1/entities/{entityId}/history': {
+        get: {
+          operationId: 'getHomeAssistantEntityHistory',
+          summary: 'Get bounded history for one allowed entity',
+          description:
+            'Use for evidence-based analysis of one allowed sensor or entity. A start_time is required; the range is limited to 31 days and Home Assistant attributes are excluded.',
+          parameters: [
+            entityIdParameter,
+            {
+              name: 'start_time',
+              in: 'query',
+              required: true,
+              schema: { type: 'string', format: 'date-time', examples: ['2026-08-01T00:00:00Z'] },
+            },
+            {
+              name: 'end_time',
+              in: 'query',
+              schema: { type: 'string', format: 'date-time', examples: ['2026-08-08T00:00:00Z'] },
+            },
+            {
+              name: 'max_points',
+              in: 'query',
+              schema: { type: 'integer', minimum: 2, maximum: 5000, default: 1000 },
+            },
+          ],
+          responses: {
+            '200': { description: 'Minimal state history for the requested entity' },
+            '404': { description: 'Entity not found' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/api/v1/automations/{entityId}': {
+        get: {
+          operationId: 'getHomeAssistantAutomationConfig',
+          summary: 'Get redacted configuration for one allowed automation entity',
+          description:
+            'Use after discovering an allowed automation entity. Sensitive config values such as tokens, passwords, API keys, authorization values, and webhooks are redacted.',
+          parameters: [entityIdParameter],
+          responses: {
+            '200': { description: 'Automation configuration with sensitive values redacted' },
+            '404': { description: 'Automation configuration not found' },
+            ...errorResponses,
+          },
+        },
+      },
       '/api/v1/areas': {
         get: {
           operationId: 'listHomeAssistantAreas',

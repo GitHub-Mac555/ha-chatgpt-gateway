@@ -103,6 +103,20 @@ export class HomeAssistantClient {
     return this.request<HomeAssistantState>(`/api/states/${encodeURIComponent(entityId)}`);
   }
 
+  async getEntityHistory(entityId: string, startTime: string, endTime: string): Promise<unknown> {
+    const query = new URLSearchParams({
+      filter_entity_id: entityId,
+      end_time: endTime,
+      minimal_response: '',
+      no_attributes: '',
+    });
+    return this.request(`/api/history/period/${encodeURIComponent(startTime)}?${query.toString()}`);
+  }
+
+  async getAutomationConfig(automationId: string): Promise<unknown> {
+    return this.request(`/api/config/automation/config/${encodeURIComponent(automationId)}`);
+  }
+
   async callService(request: ServiceCallRequest): Promise<unknown> {
     const body: Record<string, unknown> = { ...(request.data ?? {}) };
     body.entity_id = request.entity_id;
