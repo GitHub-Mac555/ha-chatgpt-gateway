@@ -72,9 +72,10 @@ Edit `.env` and set at least:
 ```env
 HOME_ASSISTANT_URL=http://homeassistant.local:8123
 HOME_ASSISTANT_TOKEN=your_home_assistant_long_lived_token
+# Generate each value separately: openssl rand -hex 32
 # Preferred: separate credentials. Give the GPT only the write key.
-GATEWAY_READ_API_KEY=use_a_long_random_secret_for_monitoring
-GATEWAY_WRITE_API_KEY=use_a_different_long_random_secret_for_chatgpt
+GATEWAY_READ_API_KEY=paste_a_distinct_openssl_rand_hex_32_output_here
+GATEWAY_WRITE_API_KEY=paste_a_different_openssl_rand_hex_32_output_here
 # Legacy alternative (read/write): GATEWAY_API_KEY=use_a_long_random_secret
 
 # Discovery phase: read only; expose only the two low-risk domains.
@@ -102,7 +103,7 @@ Check the service:
 curl http://localhost:8787/health
 ```
 
-While `READ_ONLY=true`, use `GET /api/v1/entities` to identify one to three safe entity IDs. Replace the empty `ALLOWED_ENTITIES` value with those exact IDs, restart the container, and verify reads again. Only then consider setting `READ_ONLY=false`.
+While `READ_ONLY=true`, use `GET /api/v1/entities` to identify one to three safe entity IDs. Replace the empty `ALLOWED_ENTITIES` value with those exact IDs, restart the container, and verify reads again. `READ_ONLY=false` refuses to start unless `ALLOWED_ENTITIES` is non-empty.
 
 ## Configuration
 
@@ -117,20 +118,21 @@ All runtime configuration is provided through environment variables.
 
 ### Gateway credentials
 
+- Every configured gateway key must be a distinct, exactly 64-character hexadecimal value. Generate each independently with `openssl rand -hex 32`; this supplies 32 random bytes (256-bit nominal entropy).
 - `GATEWAY_API_KEY` — backward-compatible read/write key. Configure this key or at least one scoped key.
 - `GATEWAY_READ_API_KEY` — optional read-only key for discovery and monitoring clients.
-- `GATEWAY_WRITE_API_KEY` — optional read/write key for the GPT Action.
+- `GATEWAY_WRITE_API_KEY` — optional read/write key for the GPT Action. Do not reuse the read key or a legacy key.
 
 ### Policy
 
 - `ALLOWED_DOMAINS` — required. Comma-separated Home Assistant domains exposed by the gateway.
-- `ALLOWED_ENTITIES` — default: empty. Exact comma-separated entity allow-list. An empty value exposes every entity in allowed domains.
+- `ALLOWED_ENTITIES` — default: empty only while `READ_ONLY=true`. Exact comma-separated entity allow-list. The gateway refuses to start with `READ_ONLY=false` and an empty value.
 - `READ_ONLY` — default: `false`. When `true`, blocks service calls while keeping read operations available.
 
 ### Logging and rate limits
 
 - `LOG_LEVEL` — default: `info`. Fastify/Pino log level.
-- `RATE_LIMIT_MAX` — default: `120`. Requests per source IP in the rate-limit window; `0` disables the in-memory limiter.
+- `RATE_LIMIT_MAX` — default: `120`. Requests per source IP in the rate-limit window, including missing, malformed, and invalid authentication attempts; `0` disables the in-memory limiter.
 - `RATE_LIMIT_WINDOW_MS` — default: `60000`. Rate-limit window in milliseconds.
 - `SERVICE_RATE_LIMIT_MAX` — default: `20`. Stricter service-call limit per authenticated key and source IP; `0` disables it.
 - `SERVICE_RATE_LIMIT_WINDOW_MS` — default: `60000`. Service-call rate-limit window in milliseconds.
@@ -358,7 +360,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.4.0` adds an Action-friendly dynamic-service interface: per-service contracts, validated JSON parameter payloads, short policy-checked batches, concrete target resolution, scoped credentials, and write-specific rate limiting. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
+`v0.4.1` hardens the gateway: the general rate limiter runs before authentication, configured gateway keys use a strict 256-bit hexadecimal format, and write-enabled deployments require a non-empty entity allow-list. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
 
 ## License
 

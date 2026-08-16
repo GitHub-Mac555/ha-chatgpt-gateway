@@ -9,7 +9,7 @@ cp .env.example .env
 chmod 600 .env
 ```
 
-For the first run, keep `READ_ONLY=true`, `ALLOWED_DOMAINS=light,switch`, and use an empty `ALLOWED_ENTITIES` value only for short discovery. See [security.md](security.md) before enabling writes.
+For the first run, keep `READ_ONLY=true`, `ALLOWED_DOMAINS=light,switch`, and use an empty `ALLOWED_ENTITIES` value only for short discovery. Before enabling writes, add a short explicit allow-list: the gateway refuses to start with `READ_ONLY=false` and an empty `ALLOWED_ENTITIES` value. See [security.md](security.md) before enabling writes.
 
 ## Option 1: Docker Compose with the GHCR image
 

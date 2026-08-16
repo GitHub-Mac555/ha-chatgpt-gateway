@@ -22,7 +22,8 @@ READ_ONLY_INITIAL=true
 
 # Never commit these. Ask me for them only when needed; do not print them in logs or reports.
 HOME_ASSISTANT_TOKEN=<ask me securely>
-# Preferred: generate two different random values if I do not provide them.
+# Preferred: generate two distinct values with `openssl rand -hex 32` if I do not provide them.
+# Every configured gateway key must be exactly 64 hexadecimal characters.
 GATEWAY_READ_API_KEY=<optional read-only monitoring key>
 GATEWAY_WRITE_API_KEY=<GPT Action key with read/write scope>
 # Legacy alternative: GATEWAY_API_KEY=<read/write key>
@@ -39,7 +40,7 @@ NAS_SSH_PRIVATE_KEY=<ask me securely if key authentication is used>
 7. If an inbound router rule is needed, do not attempt to access the router. Tell me to create TCP external 443 -> NAS_HOST internal 443, explain how to test it from an external network, and wait for my confirmation. If the ISP uses CGNAT, propose an outbound tunnel or VPS reverse proxy instead.
 8. Verify externally: HTTPS certificate, /health, /openapi.json, and that the OpenAPI servers URL equals https://PUBLIC_GATEWAY_HOSTNAME with no port suffix. Verify that no secret appears in the schema.
 9. Give me exact generic steps to create a personal ChatGPT GPT, import https://PUBLIC_GATEWAY_HOSTNAME/openapi.json, configure the gateway API key as Bearer authentication, and paste safe English GPT Instructions. Do not use or publish personal ChatGPT links.
-10. Only after I explicitly approve the selected entity IDs, update ALLOWED_ENTITIES, set READ_ONLY=false, restart only this Compose project, and perform one observed on/off test on a harmless device. Re-read the state afterwards.
+10. Only after I explicitly approve the selected entity IDs, update ALLOWED_ENTITIES to a non-empty explicit list, set READ_ONLY=false, restart only this Compose project, and perform one observed on/off test on a harmless device. Re-read the state afterwards.
 
 ## Safety and reporting
 - Use explicit entity IDs for all state-changing calls; never use target-less, area-wide, device-wide, or domain-wide writes.

@@ -26,12 +26,14 @@ Example first-run `.env` values:
 ```env
 HOME_ASSISTANT_URL=http://192.168.1.10:8123
 HOME_ASSISTANT_TOKEN=replace_with_a_long_lived_token
+# Run `openssl rand -hex 32` separately for each value below.
+# Each configured key must be a distinct 64-character hexadecimal value.
 # Preferred: use separate scoped keys. The GPT receives only the write key.
-GATEWAY_READ_API_KEY=replace_with_a_random_read_only_secret
-GATEWAY_WRITE_API_KEY=replace_with_a_different_random_write_secret
-# Legacy alternative: GATEWAY_API_KEY=replace_with_a_long_random_secret
+GATEWAY_READ_API_KEY=replace_with_a_64_character_hex_read_only_secret
+GATEWAY_WRITE_API_KEY=replace_with_a_different_64_character_hex_write_secret
+# Legacy alternative: GATEWAY_API_KEY=replace_with_a_64_character_hex_secret
 
-# Discovery only. Keep this small and read-only.
+# Discovery only. Keep this small and read-only. Write mode requires a non-empty allow-list.
 ALLOWED_DOMAINS=light,switch
 ALLOWED_ENTITIES=
 READ_ONLY=true
