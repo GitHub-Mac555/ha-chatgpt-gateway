@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
+import type { HomeAssistantServiceDefinition } from '../home-assistant/types.js';
 import { z } from 'zod';
 import { invalidRequest } from '../http/errors.js';
 import { isEntityAllowed } from '../security/authorization.js';
@@ -13,6 +14,42 @@ const serviceQuerySchema = z.object({
     .transform((value) => value.toLowerCase())
     .optional(),
 });
+
+const serviceParamsSchema = z.object({
+  domain: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[a-z0-9_]+$/i)
+    .transform((value) => value.toLowerCase()),
+  service: z
+    .string()
+    .min(1)
+    .max(128)
+    .regex(/^[a-z0-9_]+$/i)
+    .transform((value) => value.toLowerCase()),
+});
+
+function toServiceContract(
+  domain: string,
+  service: string,
+  definition: HomeAssistantServiceDefinition,
+) {
+  return {
+    domain,
+    service,
+    name: definition.name,
+    description: definition.description,
+    target: definition.target ?? {},
+    fields: Object.entries(definition.fields ?? {}).map(([name, field]) => ({
+      name,
+      description: field.description,
+      required: field.required ?? false,
+      example: field.example,
+      selector: field.selector,
+    })),
+  };
+}
 
 export async function registerSystemRoutes(
   app: FastifyInstance,
@@ -54,6 +91,32 @@ export async function registerSystemRoutes(
         .filter(({ domain }) => !requestedDomain || domain.toLowerCase() === requestedDomain)
         .map(({ domain, services: domainServices }) => ({ domain, services: domainServices })),
     };
+  });
+
+  app.get('/api/v1/services/:domain/:service', async (request, reply) => {
+    const parsedParams = serviceParamsSchema.safeParse(request.params);
+    if (!parsedParams.success) {
+      return reply.code(400).send(invalidRequest(parsedParams.error.issues));
+    }
+
+    const { domain, service } = parsedParams.data;
+    if (!config.allowedDomains.has(domain)) {
+      return reply.code(403).send({ error: 'forbidden', message: 'Domain is not allowed.' });
+    }
+
+    const services = await client.getServices();
+    const serviceDomain = services.find(
+      ({ domain: candidate }) => candidate.toLowerCase() === domain,
+    );
+    const definition = serviceDomain?.services[service];
+    if (!definition) {
+      return reply.code(404).send({
+        error: 'not_found',
+        message: 'The requested Home Assistant service was not found.',
+      });
+    }
+
+    return { service: toServiceContract(domain, service, definition) };
   });
 
   app.get('/api/v1/diagnostics', async () => {

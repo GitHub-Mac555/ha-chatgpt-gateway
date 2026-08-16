@@ -25,6 +25,24 @@ describe('service route', () => {
     await app.close();
   });
 
+  it('blocks service batches in read-only mode', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const config = makeConfig({ readOnly: true });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/batch',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        calls: [{ domain: 'light', service: 'turn_on', entity_id: ['light.living_room'] }],
+      },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json().error).toBe('read_only');
+    expect(fetchMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
   it('blocks a disallowed domain', async () => {
     const fetchMock = vi.fn<typeof fetch>();
     const config = makeConfig();
@@ -64,6 +82,67 @@ describe('service route', () => {
       brightness_pct: 50,
       entity_id: 'light.living_room',
     });
+    await app.close();
+  });
+
+  it('accepts Action-friendly JSON service data for dynamic Home Assistant fields', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([]));
+    const config = makeConfig({ allowedDomains: new Set(['climate']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        domain: 'climate',
+        service: 'set_temperature',
+        entity_id: ['climate.bedroom_air_conditioner'],
+        data_json: '{"temperature":27,"hvac_mode":"cool","fan_mode":"medium"}',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const [url, init] = fetchMock.mock.calls[0]!;
+    expect(url).toBe('http://homeassistant.local:8123/api/services/climate/set_temperature');
+    expect(JSON.parse(String(init?.body))).toEqual({
+      entity_id: ['climate.bedroom_air_conditioner'],
+      temperature: 27,
+      hvac_mode: 'cool',
+      fan_mode: 'medium',
+    });
+    await app.close();
+  });
+
+  it('rejects malformed or unsafe JSON service data before contacting Home Assistant', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const config = makeConfig();
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const headers = { authorization: `Bearer ${config.gatewayApiKey}` };
+
+    const malformed = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers,
+      payload: {
+        domain: 'light',
+        service: 'turn_on',
+        entity_id: ['light.living_room'],
+        data_json: '{not-json}',
+      },
+    });
+    const unsafe = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers,
+      payload: {
+        domain: 'light',
+        service: 'turn_on',
+        entity_id: ['light.living_room'],
+        data_json: '{"area_id":"living_room"}',
+      },
+    });
+    expect(malformed.statusCode).toBe(400);
+    expect(unsafe.statusCode).toBe(400);
+    expect(fetchMock).not.toHaveBeenCalled();
     await app.close();
   });
 
@@ -109,6 +188,108 @@ describe('service route', () => {
       payload: { domain: 'light', service: 'turn_on', target: { area_id: ['living-room'] } },
     });
     expect(unsafe.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('validates an entire batch before it performs any Home Assistant write', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse([]));
+    const config = makeConfig();
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/batch',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        calls: [
+          {
+            domain: 'light',
+            service: 'turn_on',
+            entity_id: ['light.living_room'],
+            data_json: '{"brightness_pct":50}',
+          },
+          {
+            domain: 'lock',
+            service: 'unlock',
+            entity_id: ['lock.front_door'],
+          },
+        ],
+      },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
+    await app.close();
+  });
+
+  it('runs an allowed batch in order', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse([{ state: 'cool' }]))
+      .mockResolvedValueOnce(jsonResponse([{ temperature: 27 }]))
+      .mockResolvedValueOnce(jsonResponse([{ fan_mode: 'medium' }]));
+    const config = makeConfig({ allowedDomains: new Set(['climate']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/batch',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        calls: [
+          {
+            domain: 'climate',
+            service: 'set_hvac_mode',
+            entity_id: ['climate.bedroom_air_conditioner'],
+            data_json: '{"hvac_mode":"cool"}',
+          },
+          {
+            domain: 'climate',
+            service: 'set_temperature',
+            entity_id: ['climate.bedroom_air_conditioner'],
+            data_json: '{"temperature":27}',
+          },
+          {
+            domain: 'climate',
+            service: 'set_fan_mode',
+            entity_id: ['climate.bedroom_air_conditioner'],
+            data_json: '{"fan_mode":"medium"}',
+          },
+        ],
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      ok: true,
+      results: [[{ state: 'cool' }], [{ temperature: 27 }], [{ fan_mode: 'medium' }]],
+    });
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      'http://homeassistant.local:8123/api/services/climate/set_hvac_mode',
+      'http://homeassistant.local:8123/api/services/climate/set_temperature',
+      'http://homeassistant.local:8123/api/services/climate/set_fan_mode',
+    ]);
+    await app.close();
+  });
+
+  it('stops a batch when Home Assistant rejects one of its calls', async () => {
+    const fetchMock = vi
+      .fn<typeof fetch>()
+      .mockResolvedValueOnce(jsonResponse([]))
+      .mockResolvedValueOnce(jsonResponse({ detail: 'upstream failure' }, 500));
+    const config = makeConfig();
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/batch',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        calls: [
+          { domain: 'light', service: 'turn_on', entity_id: ['light.living_room'] },
+          { domain: 'light', service: 'turn_off', entity_id: ['light.living_room'] },
+          { domain: 'light', service: 'toggle', entity_id: ['light.living_room'] },
+        ],
+      },
+    });
+    expect(response.statusCode).toBe(502);
+    expect(response.json().error).toBe('home_assistant_error');
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     await app.close();
   });
 

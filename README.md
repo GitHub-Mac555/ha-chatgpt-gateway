@@ -18,14 +18,31 @@ HA ChatGPT Gateway
 Home Assistant REST API
 ```
 
+## See it in action
+
+These illustrative examples show the progression from one safe device command to coordinated controls and evidence-based analysis. The gateway always applies the configured Home Assistant policy; actual capabilities depend on the entity, the available Home Assistant services, and the allowed domains/entities.
+
+### 1. Simple, confirmed control
+
+![A GPT Action safely turns on a living-room light through a protected gateway.](assets/example-simple-control.png)
+
+### 2. Coordinated room comfort
+
+![A GPT Action coordinates a bedroom thermostat, fan, and dimmed lamp through a protected gateway.](assets/example-room-comfort.png)
+
+### 3. Evidence-based energy analysis
+
+![A GPT Action analyses selected Home Assistant energy history and automation data through a protected gateway.](assets/example-energy-analysis.png)
+
 ## Features
 
 - Node.js 22 + TypeScript + Fastify
 - Zod validation
 - OpenAPI 3.1 schema suitable for GPT Actions
 - Home Assistant state and service discovery
+- Live per-service contracts with fields, examples, and selectors from Home Assistant
 - Area and device discovery scoped to allowed entities
-- Generic Home Assistant service calls
+- GPT Action-friendly generic service calls and controlled multi-step batches
 - Domain and entity allow-lists
 - Optional read-only mode
 - Separate gateway and Home Assistant credentials
@@ -113,6 +130,7 @@ GET  /openapi.json
 GET  /api/v1/config
 GET  /api/v1/diagnostics
 GET  /api/v1/services
+GET  /api/v1/services/{domain}/{service}
 GET  /api/v1/areas
 GET  /api/v1/devices
 
@@ -123,6 +141,7 @@ GET  /api/v1/entities/{entityId}/history
 GET  /api/v1/automations/{entityId}
 
 POST /api/v1/services/call
+POST /api/v1/services/batch
 ```
 
 All `/api/v1/*` endpoints require:
@@ -149,39 +168,45 @@ Content-Type: application/json
 {
   "domain": "light",
   "service": "turn_on",
-  "entity_id": "light.living_room",
-  "data": {
-    "brightness_pct": 50
-  }
+  "entity_id": ["light.living_room"],
+  "data_json": "{\"brightness_pct\":50}"
 }
 ```
 
-Multiple entities are also supported:
+`data_json` is the recommended format for GPT Actions. It is a JSON **object encoded as a string**, because Home Assistant service parameters are dynamic and come from the configured instance. First inspect `GET /api/v1/services/{domain}/{service}`, then use its field names and supported values in `data_json`.
+
+For a request that requires several Home Assistant services, use one short, ordered batch. For example, an HVAC request can set mode, temperature, and fan mode without inventing a climate-specific gateway endpoint:
 
 ```json
 {
-  "domain": "light",
-  "service": "turn_off",
-  "entity_id": ["light.living_room", "light.kitchen"]
+  "calls": [
+    {
+      "domain": "climate",
+      "service": "set_hvac_mode",
+      "entity_id": ["climate.bedroom_air_conditioner"],
+      "data_json": "{\"hvac_mode\":\"cool\"}"
+    },
+    {
+      "domain": "climate",
+      "service": "set_temperature",
+      "entity_id": ["climate.bedroom_air_conditioner"],
+      "data_json": "{\"temperature\":27}"
+    },
+    {
+      "domain": "climate",
+      "service": "set_fan_mode",
+      "entity_id": ["climate.bedroom_air_conditioner"],
+      "data_json": "{\"fan_mode\":\"medium\"}"
+    }
+  ]
 }
 ```
 
-Every target entity must pass the configured policy. Domain-wide service calls without an explicit `entity_id` are deliberately rejected.
+All calls in a batch are validated before its first write. They then run sequentially and stop on the first Home Assistant error. A batch is not transactional: Home Assistant has no generic rollback facility, so a completed earlier call is not undone.
 
-The equivalent structured form is also accepted:
+Every target entity must pass the configured policy. Domain-wide service calls without an explicit `entity_id` are deliberately rejected. `device_id`, `area_id`, `label_id`, and target-less/global calls remain deliberately refused: an entity allow-list cannot safely prove their scope.
 
-```json
-{
-  "domain": "light",
-  "service": "turn_on",
-  "target": { "entity_id": ["light.living_room", "light.kitchen"] },
-  "data": { "brightness_pct": 50 }
-}
-```
-
-`device_id`, `area_id`, `label_id`, and target-less/global calls are deliberately refused in v0.2.0. An entity allow-list cannot safely prove the scope of those targets, so callers must first use entity, area, and device discovery and then send the explicit allowed entity IDs.
-
-The service name itself is not hard-coded: the gateway forwards an authorized service call to Home Assistant. `/api/v1/services` can be used to discover the services currently exposed by the configured Home Assistant instance, filtered to allowed domains.
+The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Legacy REST clients may continue to send an object in `data` and may use `target.entity_id`; GPT Actions should use the documented `entity_id` array and `data_json` format.
 
 ## History and automation analysis
 
@@ -315,7 +340,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.2.0` is a complete, policy-enforced operational baseline. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
+`v0.4.0` adds an Action-friendly dynamic-service interface: per-service contracts, validated JSON parameter payloads, and short policy-checked batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
 
 ## License
 

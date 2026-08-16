@@ -39,7 +39,9 @@ Avoid initially authorizing the following, even if their entity IDs are in an ot
 
 `ALLOWED_DOMAINS` is required. `ALLOWED_ENTITIES` is optional: when empty, all entities in the allowed domains are eligible; when non-empty, it is an exact entity-ID allow-list. Every entity in a multi-entity service call is checked.
 
-Service calls require an explicit `entity_id` or `target.entity_id`. The gateway deliberately rejects global calls and `device_id`, `area_id`, and `label_id` targets. Those target types cannot be proven to stay within an entity allow-list without a broader authorization policy, so refusing them is safer than silently widening access.
+Service calls require an explicit `entity_id` or legacy `target.entity_id`. The gateway deliberately rejects global calls and `device_id`, `area_id`, and `label_id` targets. Those target types cannot be proven to stay within an entity allow-list without a broader authorization policy, so refusing them is safer than silently widening access.
+
+For GPT Actions, parameterized service data is sent as a `data_json` string containing one JSON object. The gateway parses it locally, rejects malformed JSON and target fields hidden in the payload, and applies the normal domain/entity policy before forwarding it to Home Assistant. `POST /api/v1/services/batch` validates every call in a batch before performing its first write, executes them in order, and stops on an upstream error. It cannot roll back a service that Home Assistant has already completed.
 
 An in-memory per-client rate limiter protects authenticated API routes by default. Configure it with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`, or set `RATE_LIMIT_MAX=0` only when another trusted limiter protects the endpoint. Home Assistant requests have a bounded timeout controlled by `HOME_ASSISTANT_TIMEOUT_MS`.
 

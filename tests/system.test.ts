@@ -70,7 +70,23 @@ describe('system routes and Home Assistant failures', () => {
         });
       }
       return jsonResponse([
-        { domain: 'light', services: { turn_on: { name: 'Turn on' } } },
+        {
+          domain: 'light',
+          services: {
+            turn_on: {
+              name: 'Turn on',
+              description: 'Turn on one or more lights.',
+              fields: {
+                brightness_pct: {
+                  description: 'Brightness in percent.',
+                  required: false,
+                  example: 50,
+                  selector: { number: { min: 1, max: 100 } },
+                },
+              },
+            },
+          },
+        },
         { domain: 'lock', services: { unlock: { name: 'Unlock' } } },
       ]);
     });
@@ -87,9 +103,8 @@ describe('system routes and Home Assistant failures', () => {
     expect(diagnostics.json().home_assistant.reachable).toBe(true);
 
     const services = await app.inject({ method: 'GET', url: '/api/v1/services', headers });
-    expect(services.json().domains).toEqual([
-      { domain: 'light', services: { turn_on: { name: 'Turn on' } } },
-    ]);
+    expect(services.json().domains).toHaveLength(1);
+    expect(services.json().domains[0].domain).toBe('light');
 
     const disallowed = await app.inject({
       method: 'GET',
@@ -97,6 +112,64 @@ describe('system routes and Home Assistant failures', () => {
       headers,
     });
     expect(disallowed.statusCode).toBe(403);
+    await app.close();
+  });
+
+  it('returns a compact live contract for one allowed service', async () => {
+    const servicePayload = [
+      {
+        domain: 'climate',
+        services: {
+          set_fan_mode: {
+            name: 'Set fan mode',
+            description: 'Set the fan mode.',
+            fields: {
+              fan_mode: {
+                description: 'Fan mode to set.',
+                required: true,
+                example: 'medium',
+                selector: { select: { options: ['low', 'medium', 'high'] } },
+              },
+            },
+          },
+        },
+      },
+    ];
+    const fetchMock = vi.fn<typeof fetch>(() => jsonResponse(servicePayload));
+    const config = makeConfig({ allowedDomains: new Set(['climate']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const headers = { authorization: `Bearer ${config.gatewayApiKey}` };
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v1/services/climate/set_fan_mode',
+      headers,
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      service: {
+        domain: 'climate',
+        service: 'set_fan_mode',
+        name: 'Set fan mode',
+        description: 'Set the fan mode.',
+        target: {},
+        fields: [
+          {
+            name: 'fan_mode',
+            description: 'Fan mode to set.',
+            required: true,
+            example: 'medium',
+            selector: { select: { options: ['low', 'medium', 'high'] } },
+          },
+        ],
+      },
+    });
+
+    const notFound = await app.inject({
+      method: 'GET',
+      url: '/api/v1/services/climate/not_real',
+      headers,
+    });
+    expect(notFound.statusCode).toBe(404);
     await app.close();
   });
 
