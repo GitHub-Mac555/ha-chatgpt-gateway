@@ -24,21 +24,17 @@ These illustrative examples show the progression from one safe device command to
 
 ### 1. Simple, confirmed control
 
-<p align="center">
-  <img src="assets/example-simple-control.png" width="640" alt="A GPT Action safely turns on a living-room light through a protected gateway.">
-</p>
+[![A GPT Action safely turns on a living-room light through a protected gateway.](assets/example-simple-control.png)](assets/example-simple-control.png)
 
 ### 2. Coordinated room comfort
 
-<p align="center">
-  <img src="assets/example-room-comfort.png" width="640" alt="A GPT Action coordinates a bedroom thermostat, fan, and dimmed lamp through a protected gateway.">
-</p>
+[![A GPT Action coordinates a bedroom thermostat, fan, and dimmed lamp through a protected gateway.](assets/example-room-comfort.png)](assets/example-room-comfort.png)
 
 ### 3. Evidence-based energy analysis
 
-<p align="center">
-  <img src="assets/example-energy-analysis.png" width="640" alt="A GPT Action analyses selected Home Assistant energy history and automation data through a protected gateway.">
-</p>
+[![A GPT Action analyses selected Home Assistant energy history and automation data through a protected gateway.](assets/example-energy-analysis.png)](assets/example-energy-analysis.png)
+
+On mobile, tap an image to open it at full resolution.
 
 ## Features
 
