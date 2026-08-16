@@ -48,7 +48,7 @@ function getMemberEntityIds(attributes: Record<string, unknown> | undefined): st
 export async function resolveServiceEntityTargets(
   client: HomeAssistantClient,
   config: GatewayConfig,
-  domain: string,
+  allowedDomains: ReadonlySet<string>,
   targetEntityIds: string[],
 ): Promise<TargetResolutionResult> {
   const resolved = new Set<string>();
@@ -66,11 +66,11 @@ export async function resolveServiceEntityTargets(
     if (ancestors.has(normalizedEntityId)) {
       return failure(400, 'invalid_request', 'Target group contains a cycle.');
     }
-    if (getEntityDomain(normalizedEntityId) !== domain) {
+    if (!allowedDomains.has(getEntityDomain(normalizedEntityId) ?? '')) {
       return failure(
         400,
         'invalid_request',
-        'Every resolved entity_id domain must match the service domain.',
+        'One or more entity_id values are not valid targets for this service.',
       );
     }
     if (!isEntityAllowed(config, normalizedEntityId)) {

@@ -190,11 +190,13 @@ Content-Type: application/json
   "domain": "light",
   "service": "turn_on",
   "entity_id": ["light.living_room"],
-  "data_json": "{\"brightness_pct\":50}"
+  "data": {
+    "brightness_pct": 50
+  }
 }
 ```
 
-`data_json` is the recommended format for GPT Actions. It is a JSON **object encoded as a string**, because Home Assistant service parameters are dynamic and come from the configured instance. First inspect `GET /api/v1/services/{domain}/{service}`, then use its field names and supported values in `data_json`.
+For GPT Actions, use `data`: it is a structured JSON object with the dynamic service parameters returned by `GET /api/v1/services/{domain}/{service}`. This lets an Action supply values such as `hvac_mode`, `temperature`, `fan_mode`, brightness, colour, position, or integration-specific fields. `data_json` remains supported as a legacy JSON-object-encoded string for existing clients, but Actions should prefer `data` and must not send both fields.
 
 For a request that requires several Home Assistant services, use one short, ordered batch. For example, an HVAC request can set mode, temperature, and fan mode without inventing a climate-specific gateway endpoint:
 
@@ -205,19 +207,19 @@ For a request that requires several Home Assistant services, use one short, orde
       "domain": "climate",
       "service": "set_hvac_mode",
       "entity_id": ["climate.bedroom_air_conditioner"],
-      "data_json": "{\"hvac_mode\":\"cool\"}"
+      "data": { "hvac_mode": "cool" }
     },
     {
       "domain": "climate",
       "service": "set_temperature",
       "entity_id": ["climate.bedroom_air_conditioner"],
-      "data_json": "{\"temperature\":27}"
+      "data": { "temperature": 27 }
     },
     {
       "domain": "climate",
       "service": "set_fan_mode",
       "entity_id": ["climate.bedroom_air_conditioner"],
-      "data_json": "{\"fan_mode\":\"medium\"}"
+      "data": { "fan_mode": "medium" }
     }
   ]
 }
@@ -227,7 +229,9 @@ All calls in a batch are validated before its first write. They then run sequent
 
 Every target entity must pass the configured policy. Before a write, group-like entities are resolved recursively into concrete entity IDs; if any resolved member is disallowed, cyclic, malformed, too numerous, or from another domain, the entire call is rejected before Home Assistant receives a service request. Domain-wide service calls, `device_id`, `area_id`, `label_id`, and target-less/global calls remain deliberately refused.
 
-The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Legacy REST clients may continue to send an object in `data` and may use `target.entity_id`; GPT Actions should use the documented `entity_id` array and `data_json` format.
+The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Use the documented `entity_id` array and structured `data` object for GPT Actions. A single call can target several compatible allowed entities; when a request needs different services, use an ordered batch. Entity-valued fields advertised by a service contract (for example a TTS media-player field or media-player group members) are also checked against the domain/entity policy. Legacy REST clients may continue to use `target.entity_id` or `data_json`.
+
+Services with no entity target published by Home Assistant remain unavailable. This deliberately excludes broad or global operations even if Home Assistant itself would accept them.
 
 ## History and automation analysis
 
@@ -363,7 +367,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.4.2` adds restrictive, proxy-aware rate limiting: only explicitly configured proxy peers can supply client-forwarding headers, so clients behind a reverse proxy retain separate rate-limit buckets without allowing direct-header spoofing. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
+`v0.4.3` makes parameterized and multi-device GPT Action calls practical: dynamic Home Assistant service parameters are now exposed as a structured `data` object, and ordered batches can apply the same approved parameters to multiple compatible explicit entities. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
 
 ## License
 

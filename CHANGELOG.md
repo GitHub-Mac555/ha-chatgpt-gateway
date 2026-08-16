@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.4.3 — Structured GPT Action service data
+
+### Fixed
+
+- Exposes Home Assistant service parameters as a structured `data` object in the GPT Action OpenAPI schema.
+- Supports the same structured data in ordered service batches, including a single call that targets multiple compatible entities.
+- Keeps the legacy `data_json` form for existing REST clients and imported Actions, while documenting `data` as the GPT Action format.
+
 ## v0.4.2 — Proxy-aware rate limiting
 
 ### Security

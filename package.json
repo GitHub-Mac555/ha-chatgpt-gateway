@@ -1,6 +1,6 @@
 {
   "name": "ha-chatgpt-gateway",
-  "version": "0.4.2",
+  "version": "0.4.3",
   "description": "Self-hosted gateway connecting ChatGPT GPT Actions to Home Assistant without OpenAI API keys.",
   "type": "module",
   "engines": {

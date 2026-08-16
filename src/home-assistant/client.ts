@@ -5,6 +5,7 @@ import type {
   HomeAssistantDevice,
   HomeAssistantEntityRegistryEntry,
   HomeAssistantServiceDomain,
+  HomeAssistantServiceDefinition,
   HomeAssistantState,
   ServiceCallRequest,
 } from './types.js';
@@ -93,6 +94,15 @@ export class HomeAssistantClient {
 
   async getServices(): Promise<HomeAssistantServiceDomain[]> {
     return this.request<HomeAssistantServiceDomain[]>('/api/services');
+  }
+
+  getServiceDefinition(
+    services: HomeAssistantServiceDomain[],
+    domain: string,
+    service: string,
+  ): HomeAssistantServiceDefinition | undefined {
+    const serviceDomain = services.find((candidate) => candidate.domain.toLowerCase() === domain);
+    return serviceDomain?.services[service];
   }
 
   async getStates(): Promise<HomeAssistantState[]> {
