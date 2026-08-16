@@ -9,7 +9,13 @@ import {
   type ServiceCallInput,
 } from '../schemas/service.js';
 import { getEntityDomain, isDomainAllowed, isEntityAllowed } from '../security/authorization.js';
+import {
+  resolveServiceEntityTargets,
+  type TargetResolutionFailure,
+} from '../security/target-resolution.js';
 import { invalidRequest } from '../http/errors.js';
+import { hasGatewayScope } from '../security/authentication.js';
+import { createServiceRateLimitHook } from '../security/rate-limit.js';
 
 type PreparedServiceCall = {
   domain: string;
@@ -20,10 +26,11 @@ type PreparedServiceCall = {
 
 type ServiceInput = ServiceCallInput | ActionServiceCallInput;
 
-function prepareServiceCall(
+async function prepareServiceCall(
   input: ServiceInput,
   config: GatewayConfig,
-): { call?: PreparedServiceCall; statusCode?: number; error?: string; message?: string } {
+  client: HomeAssistantClient,
+): Promise<{ call?: PreparedServiceCall; statusCode?: number; error?: string; message?: string }> {
   if (!isDomainAllowed(config, input.domain)) {
     return { statusCode: 403, error: 'forbidden', message: 'Domain is not allowed.' };
   }
@@ -71,11 +78,25 @@ function prepareServiceCall(
     return { statusCode: 400, error: 'invalid_request', message: dataResult.error };
   }
 
+  const resolvedTargets = await resolveServiceEntityTargets(
+    client,
+    config,
+    input.domain,
+    entityIds,
+  );
+  if ('error' in resolvedTargets) {
+    const targetFailure: TargetResolutionFailure = resolvedTargets;
+    return targetFailure;
+  }
+
   return {
     call: {
       domain: input.domain,
       service: input.service,
-      entity_id: targetEntityIds,
+      entity_id:
+        typeof input.entity_id === 'string' && resolvedTargets.entityIds.length === 1
+          ? (resolvedTargets.entityIds[0] ?? resolvedTargets.entityIds)
+          : resolvedTargets.entityIds,
       data: dataResult.data,
     },
   };
@@ -83,7 +104,7 @@ function prepareServiceCall(
 
 function sendPreparedCallError(
   reply: { code(statusCode: number): { send(payload: unknown): unknown } },
-  result: ReturnType<typeof prepareServiceCall>,
+  result: Awaited<ReturnType<typeof prepareServiceCall>>,
 ) {
   return reply.code(result.statusCode ?? 400).send({
     error: result.error ?? 'invalid_request',
@@ -96,7 +117,18 @@ export async function registerServiceRoutes(
   config: GatewayConfig,
   client: HomeAssistantClient,
 ): Promise<void> {
+  const rateLimitServiceCall = createServiceRateLimitHook(config);
+
   app.post('/api/v1/services/call', async (request, reply) => {
+    if (!hasGatewayScope(request, 'write')) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: 'This gateway API key does not have write scope.',
+      });
+    }
+    await rateLimitServiceCall(request, reply);
+    if (reply.sent) return;
+
     if (config.readOnly) {
       return reply.code(403).send({
         error: 'read_only',
@@ -109,7 +141,7 @@ export async function registerServiceRoutes(
       return reply.code(400).send(invalidRequest(bodyResult.error.issues));
     }
 
-    const prepared = prepareServiceCall(bodyResult.data, config);
+    const prepared = await prepareServiceCall(bodyResult.data, config, client);
     if (!prepared.call) return sendPreparedCallError(reply, prepared);
 
     const result = await client.callService(prepared.call);
@@ -117,6 +149,15 @@ export async function registerServiceRoutes(
   });
 
   app.post('/api/v1/services/batch', async (request, reply) => {
+    if (!hasGatewayScope(request, 'write')) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: 'This gateway API key does not have write scope.',
+      });
+    }
+    await rateLimitServiceCall(request, reply);
+    if (reply.sent) return;
+
     if (config.readOnly) {
       return reply.code(403).send({
         error: 'read_only',
@@ -132,7 +173,7 @@ export async function registerServiceRoutes(
     // Validate the complete batch before any Home Assistant state can change.
     const calls: PreparedServiceCall[] = [];
     for (const input of bodyResult.data.calls) {
-      const prepared = prepareServiceCall(input, config);
+      const prepared = await prepareServiceCall(input, config, client);
       if (!prepared.call) return sendPreparedCallError(reply, prepared);
       calls.push(prepared.call);
     }

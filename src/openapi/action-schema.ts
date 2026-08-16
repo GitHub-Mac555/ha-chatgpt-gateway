@@ -271,7 +271,8 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'API key',
-          description: 'Use the GATEWAY_API_KEY only. Do not use a Home Assistant token.',
+          description:
+            'Use GATEWAY_WRITE_API_KEY when scoped credentials are configured, otherwise use the legacy GATEWAY_API_KEY. Do not use a Home Assistant token.',
         },
       },
       schemas: {

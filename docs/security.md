@@ -2,15 +2,15 @@
 
 ## Trust boundaries
 
-- ChatGPT knows `GATEWAY_API_KEY`.
-- HA ChatGPT Gateway knows both `GATEWAY_API_KEY` and `HOME_ASSISTANT_TOKEN`.
+- ChatGPT knows only one gateway credential: preferably `GATEWAY_WRITE_API_KEY`, or the backward-compatible `GATEWAY_API_KEY`.
+- HA ChatGPT Gateway knows gateway credentials and `HOME_ASSISTANT_TOKEN`.
 - Home Assistant never needs OpenAI credentials.
 - `HOME_ASSISTANT_TOKEN` must never be copied into a GPT Action.
 
 ## Recommended baseline
 
 - use HTTPS for every public request;
-- generate a long random `GATEWAY_API_KEY`;
+- for a new deployment, generate separate random `GATEWAY_READ_API_KEY` and `GATEWAY_WRITE_API_KEY` values; give the GPT only the write key and do not reuse either value;
 - start with `READ_ONLY=true`, `ALLOWED_DOMAINS=light,switch`, and an empty allow-list only long enough to discover devices;
 - then use `ALLOWED_ENTITIES` for a strict, short entity allow-list before enabling writes;
 - avoid exposing sensitive domains such as `lock` and `alarm_control_panel` by default;
@@ -39,9 +39,13 @@ Avoid initially authorizing the following, even if their entity IDs are in an ot
 
 `ALLOWED_DOMAINS` is required. `ALLOWED_ENTITIES` is optional: when empty, all entities in the allowed domains are eligible; when non-empty, it is an exact entity-ID allow-list. Every entity in a multi-entity service call is checked.
 
-Service calls require an explicit `entity_id` or legacy `target.entity_id`. The gateway deliberately rejects global calls and `device_id`, `area_id`, and `label_id` targets. Those target types cannot be proven to stay within an entity allow-list without a broader authorization policy, so refusing them is safer than silently widening access.
+Service calls require an explicit `entity_id` or legacy `target.entity_id`. Before forwarding a write, the gateway resolves group-like entity targets recursively into concrete entity IDs. Every concrete result must stay in the requested domain and pass the entity allow-list; one blocked member, target cycle, malformed group, or excessive expansion rejects the entire call before any service call is sent. The gateway deliberately rejects global calls and `device_id`, `area_id`, and `label_id` targets.
 
-For GPT Actions, parameterized service data is sent as a `data_json` string containing one JSON object. The gateway parses it locally, rejects malformed JSON and target fields hidden in the payload, and applies the normal domain/entity policy before forwarding it to Home Assistant. `POST /api/v1/services/batch` validates every call in a batch before performing its first write, executes them in order, and stops on an upstream error. It cannot roll back a service that Home Assistant has already completed.
+For GPT Actions, parameterized service data is sent as a `data_json` string containing one JSON object. The gateway parses it locally, rejects malformed JSON, target fields hidden in the payload, and Home Assistant template expressions, then applies the normal domain/entity policy before forwarding it to Home Assistant. `POST /api/v1/services/batch` resolves and validates every call in a batch before performing its first write, executes them in order, and stops on an upstream error. It cannot roll back a service that Home Assistant has already completed.
+
+`GATEWAY_READ_API_KEY` has only `read` scope. `GATEWAY_WRITE_API_KEY` has `read` and `write` scopes because the GPT must discover entities and services before acting. `GATEWAY_API_KEY` remains a backward-compatible read/write key; migrate to separate scoped keys to reduce the effect of a leaked read-only credential. Service endpoints have a separate in-memory limit controlled by `SERVICE_RATE_LIMIT_MAX` and `SERVICE_RATE_LIMIT_WINDOW_MS`, in addition to the general endpoint rate limit.
+
+An allowed script, scene, or automation can itself produce indirect effects outside the entity targeted by its own service call. The gateway cannot safely infer all of those internal effects at runtime. Treat permission to run one of these entities as permission for its complete Home Assistant behavior, and do not grant them to a write-capable key unless that behavior has been reviewed.
 
 An in-memory per-client rate limiter protects authenticated API routes by default. Configure it with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`, or set `RATE_LIMIT_MAX=0` only when another trusted limiter protects the endpoint. Home Assistant requests have a bounded timeout controlled by `HOME_ASSISTANT_TIMEOUT_MS`.
 

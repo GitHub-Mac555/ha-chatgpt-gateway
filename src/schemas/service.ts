@@ -110,6 +110,13 @@ function validateServiceData(value: unknown, depth = 0): string | undefined {
     return 'Service data is nested too deeply.';
   }
 
+  if (
+    typeof value === 'string' &&
+    (value.includes('{{') || value.includes('{%') || value.includes('{#'))
+  ) {
+    return 'Home Assistant template expressions are not permitted in service data.';
+  }
+
   if (Array.isArray(value)) {
     for (const item of value) {
       const error = validateServiceData(item, depth + 1);

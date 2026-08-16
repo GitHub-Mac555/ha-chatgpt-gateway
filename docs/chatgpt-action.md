@@ -26,7 +26,7 @@ ChatGPT Action clients require the OpenAPI `servers` origin to match the importe
 
    If the import button does not react, open the URL in a separate browser tab, copy the complete JSON document, and paste it into the schema editor. Do not edit the generated `servers` URL to a different hostname or port.
 
-5. Keep the imported HTTP Bearer security scheme. Enter the value of `GATEWAY_API_KEY` when the editor requests the action credential. If the UI calls it an API key, select the Bearer/Authorization option when offered. Enter the `Bearer ` prefix only when the UI explicitly asks for the full header value; otherwise enter the raw gateway key.
+5. Keep the imported HTTP Bearer security scheme. Enter `GATEWAY_WRITE_API_KEY` when scoped keys are configured, otherwise use the legacy `GATEWAY_API_KEY`. If the UI calls it an API key, select the Bearer/Authorization option when offered. Enter the `Bearer ` prefix only when the UI explicitly asks for the full header value; otherwise enter the raw gateway key. A `GATEWAY_READ_API_KEY` is useful for a separate monitoring client but cannot call services.
 6. Never enter `HOME_ASSISTANT_TOKEN` in ChatGPT. It belongs only in the gateway host's `.env` file.
 7. Save or update the GPT.
 

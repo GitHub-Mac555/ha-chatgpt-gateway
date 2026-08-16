@@ -70,7 +70,10 @@ Edit `.env` and set at least:
 ```env
 HOME_ASSISTANT_URL=http://homeassistant.local:8123
 HOME_ASSISTANT_TOKEN=your_home_assistant_long_lived_token
-GATEWAY_API_KEY=use_a_long_random_secret
+# Preferred: separate credentials. Give the GPT only the write key.
+GATEWAY_READ_API_KEY=use_a_long_random_secret_for_monitoring
+GATEWAY_WRITE_API_KEY=use_a_different_long_random_secret_for_chatgpt
+# Legacy alternative (read/write): GATEWAY_API_KEY=use_a_long_random_secret
 
 # Discovery phase: read only; expose only the two low-risk domains.
 ALLOWED_DOMAINS=light,switch
@@ -103,19 +106,23 @@ While `READ_ONLY=true`, use `GET /api/v1/entities` to identify one to three safe
 
 All runtime configuration is provided through environment variables.
 
-| Variable                    | Default                           | Description                                                                            |
-| --------------------------- | --------------------------------- | -------------------------------------------------------------------------------------- |
-| `PORT`                      | `8787`                            | HTTP port used inside the container                                                    |
-| `HOME_ASSISTANT_URL`        | `http://homeassistant.local:8123` | Home Assistant base URL                                                                |
-| `HOME_ASSISTANT_TOKEN`      | required                          | Home Assistant Long-Lived Access Token                                                 |
-| `GATEWAY_API_KEY`           | required                          | Secret used by the GPT Action to authenticate to the gateway                           |
-| `ALLOWED_DOMAINS`           | required                          | Comma-separated Home Assistant domains exposed by the gateway                          |
-| `ALLOWED_ENTITIES`          | empty                             | Exact comma-separated entity allow-list. Empty exposes every entity in allowed domains |
-| `READ_ONLY`                 | `false`                           | When `true`, blocks service calls while keeping read operations available              |
-| `LOG_LEVEL`                 | `info`                            | Fastify/Pino log level                                                                 |
-| `HOME_ASSISTANT_TIMEOUT_MS` | `10000`                           | Timeout for each REST or internal WebSocket request to Home Assistant                  |
-| `RATE_LIMIT_MAX`            | `120`                             | Requests per source IP in the rate-limit window; `0` disables the in-memory limiter    |
-| `RATE_LIMIT_WINDOW_MS`      | `60000`                           | Rate-limit window in milliseconds                                                      |
+| Variable                       | Default                           | Description                                                                            |
+| ------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------- |
+| `PORT`                         | `8787`                            | HTTP port used inside the container                                                    |
+| `HOME_ASSISTANT_URL`           | `http://homeassistant.local:8123` | Home Assistant base URL                                                                |
+| `HOME_ASSISTANT_TOKEN`         | required                          | Home Assistant Long-Lived Access Token                                                 |
+| `GATEWAY_API_KEY`              | one key required                  | Backward-compatible read/write key                                                     |
+| `GATEWAY_READ_API_KEY`         | empty                             | Optional read-only key for discovery and monitoring clients                            |
+| `GATEWAY_WRITE_API_KEY`        | empty                             | Optional read/write key for the GPT Action                                             |
+| `ALLOWED_DOMAINS`              | required                          | Comma-separated Home Assistant domains exposed by the gateway                          |
+| `ALLOWED_ENTITIES`             | empty                             | Exact comma-separated entity allow-list. Empty exposes every entity in allowed domains |
+| `READ_ONLY`                    | `false`                           | When `true`, blocks service calls while keeping read operations available              |
+| `LOG_LEVEL`                    | `info`                            | Fastify/Pino log level                                                                 |
+| `HOME_ASSISTANT_TIMEOUT_MS`    | `10000`                           | Timeout for each REST or internal WebSocket request to Home Assistant                  |
+| `RATE_LIMIT_MAX`               | `120`                             | Requests per source IP in the rate-limit window; `0` disables the in-memory limiter    |
+| `RATE_LIMIT_WINDOW_MS`         | `60000`                           | Rate-limit window in milliseconds                                                      |
+| `SERVICE_RATE_LIMIT_MAX`       | `20`                              | Stricter service-call limit per authenticated key and source IP; `0` disables it       |
+| `SERVICE_RATE_LIMIT_WINDOW_MS` | `60000`                           | Service-call rate-limit window in milliseconds                                         |
 
 See `.env.example` for the complete template. An empty `ALLOWED_ENTITIES` value is appropriate only for a short, read-only discovery phase. A non-empty allow-list also prevents newly added Home Assistant entities from becoming available automatically.
 
@@ -144,10 +151,10 @@ POST /api/v1/services/call
 POST /api/v1/services/batch
 ```
 
-All `/api/v1/*` endpoints require:
+All `/api/v1/*` endpoints require a configured gateway credential:
 
 ```http
-Authorization: Bearer <GATEWAY_API_KEY>
+Authorization: Bearer <GATEWAY_WRITE_API_KEY-or-GATEWAY_API_KEY>
 ```
 
 `/health` and `/openapi.json` are public so that infrastructure health checks and GPT Action schema import work without exposing Home Assistant credentials.
@@ -160,7 +167,7 @@ Example:
 
 ```http
 POST /api/v1/services/call
-Authorization: Bearer <GATEWAY_API_KEY>
+Authorization: Bearer <GATEWAY_WRITE_API_KEY-or-GATEWAY_API_KEY>
 Content-Type: application/json
 ```
 
@@ -204,7 +211,7 @@ For a request that requires several Home Assistant services, use one short, orde
 
 All calls in a batch are validated before its first write. They then run sequentially and stop on the first Home Assistant error. A batch is not transactional: Home Assistant has no generic rollback facility, so a completed earlier call is not undone.
 
-Every target entity must pass the configured policy. Domain-wide service calls without an explicit `entity_id` are deliberately rejected. `device_id`, `area_id`, `label_id`, and target-less/global calls remain deliberately refused: an entity allow-list cannot safely prove their scope.
+Every target entity must pass the configured policy. Before a write, group-like entities are resolved recursively into concrete entity IDs; if any resolved member is disallowed, cyclic, malformed, too numerous, or from another domain, the entire call is rejected before Home Assistant receives a service request. Domain-wide service calls, `device_id`, `area_id`, `label_id`, and target-less/global calls remain deliberately refused.
 
 The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Legacy REST clients may continue to send an object in `data` and may use `target.entity_id`; GPT Actions should use the documented `entity_id` array and `data_json` format.
 
@@ -251,7 +258,7 @@ https://your-gateway.example.com/openapi.json
 
 into the GPT Action configuration.
 
-Configure API-key authentication using the same value as `GATEWAY_API_KEY` and send it as a Bearer token.
+Configure API-key authentication using `GATEWAY_WRITE_API_KEY` (preferred) or the legacy `GATEWAY_API_KEY`, and send it as a Bearer token.
 
 See [docs/chatgpt-action.md](docs/chatgpt-action.md).
 
@@ -340,7 +347,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.4.0` adds an Action-friendly dynamic-service interface: per-service contracts, validated JSON parameter payloads, and short policy-checked batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
+`v0.4.0` adds an Action-friendly dynamic-service interface: per-service contracts, validated JSON parameter payloads, short policy-checked batches, concrete target resolution, scoped credentials, and write-specific rate limiting. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
 
 ## License
 
