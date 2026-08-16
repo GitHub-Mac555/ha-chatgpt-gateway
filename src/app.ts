@@ -64,8 +64,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   app.get('/openapi.json', async () => buildOpenApiSchema(options.config.publicBaseUrl));
 
   await app.register(async (protectedApp) => {
-    protectedApp.addHook('onRequest', createAuthenticationHook(options.config));
     protectedApp.addHook('onRequest', createRateLimitHook(options.config));
+    protectedApp.addHook('onRequest', createAuthenticationHook(options.config));
     await registerEntityRoutes(protectedApp, options.config, client);
     await registerHistoryRoutes(protectedApp, options.config, client);
     await registerServiceRoutes(protectedApp, options.config, client);

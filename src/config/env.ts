@@ -7,7 +7,9 @@ const booleanFromString = z
 
 const logLevelSchema = z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']);
 
-const gatewayKeySchema = z.string().min(16, 'Gateway API keys must contain at least 16 characters');
+const gatewayKeySchema = z
+  .string()
+  .regex(/^[a-f0-9]{64}$/i, 'Gateway API keys must be exactly 64 hexadecimal characters.');
 
 const envSchema = z
   .object({
@@ -39,6 +41,27 @@ const envSchema = z
         path: ['GATEWAY_API_KEY'],
         message:
           'Set GATEWAY_API_KEY or at least one of GATEWAY_READ_API_KEY and GATEWAY_WRITE_API_KEY.',
+      });
+    }
+
+    const configuredKeys = [
+      value.GATEWAY_API_KEY,
+      value.GATEWAY_READ_API_KEY,
+      value.GATEWAY_WRITE_API_KEY,
+    ].filter((key): key is string => Boolean(key));
+    if (new Set(configuredKeys).size !== configuredKeys.length) {
+      context.addIssue({
+        code: 'custom',
+        path: ['GATEWAY_READ_API_KEY'],
+        message: 'Configured gateway API keys must be distinct.',
+      });
+    }
+
+    if (!value.READ_ONLY && parseCsv(value.ALLOWED_ENTITIES).size === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ALLOWED_ENTITIES'],
+        message: 'READ_ONLY=false requires a non-empty ALLOWED_ENTITIES allow-list.',
       });
     }
   });

@@ -1,15 +1,17 @@
 import type { GatewayConfig } from '../src/config/env.js';
 
+export const TEST_GATEWAY_KEY = '0123456789abcdef'.repeat(4);
+
 export function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfig {
   return {
     port: 8787,
     homeAssistantUrl: 'http://homeassistant.local:8123',
     homeAssistantToken: 'ha-test-token',
-    gatewayApiKey: 'gateway-test-key-1234567890',
+    gatewayApiKey: TEST_GATEWAY_KEY,
     gatewayCredentials: [
       {
         id: 'legacy',
-        key: 'gateway-test-key-1234567890',
+        key: TEST_GATEWAY_KEY,
         scopes: new Set(['read', 'write']),
       },
     ],

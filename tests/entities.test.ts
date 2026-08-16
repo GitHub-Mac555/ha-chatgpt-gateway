@@ -28,6 +28,75 @@ describe('entity routes', () => {
     await app.close();
   });
 
+  it('rate limits repeated invalid Bearer tokens before authentication', async () => {
+    const config = makeConfig({ rateLimitMax: 2, rateLimitWindowMs: 60_000 });
+    const app = await buildApp({ config, logger: false });
+    const request = () =>
+      app.inject({
+        method: 'GET',
+        url: '/api/v1/entities',
+        headers: { authorization: 'Bearer definitely-not-the-right-key' },
+      });
+
+    expect((await request()).statusCode).toBe(401);
+    expect((await request()).statusCode).toBe(401);
+    expect((await request()).statusCode).toBe(429);
+    expect((await request()).statusCode).toBe(429);
+    await app.close();
+  });
+
+  it('counts missing, malformed, invalid, and valid credentials in one general rate-limit bucket', async () => {
+    const config = makeConfig({ rateLimitMax: 3, rateLimitWindowMs: 60_000 });
+    const app = await buildApp({ config, logger: false });
+
+    expect((await app.inject({ method: 'GET', url: '/api/v1/entities' })).statusCode).toBe(401);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/v1/entities',
+          headers: { authorization: 'Basic not-a-bearer-token' },
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/v1/entities',
+          headers: { authorization: 'Bearer definitely-not-the-right-key' },
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/api/v1/entities',
+          headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+        })
+      ).statusCode,
+    ).toBe(429);
+    await app.close();
+  });
+
+  it('rate limits authenticated requests after the configured limit', async () => {
+    const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(sampleStates));
+    const config = makeConfig({ rateLimitMax: 1, rateLimitWindowMs: 60_000 });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const request = () =>
+      app.inject({
+        method: 'GET',
+        url: '/api/v1/entities',
+        headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      });
+
+    expect((await request()).statusCode).toBe(200);
+    expect((await request()).statusCode).toBe(429);
+    expect(fetchMock).toHaveBeenCalledOnce();
+    await app.close();
+  });
+
   it('filters out disallowed domains', async () => {
     const fetchMock = vi.fn<typeof fetch>().mockResolvedValue(jsonResponse(sampleStates));
     const config = makeConfig();
