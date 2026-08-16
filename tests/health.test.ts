@@ -8,7 +8,7 @@ describe('health and OpenAPI', () => {
     const app = await buildApp({ config: makeConfig(), logger: false });
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok', version: '0.4.2', readOnly: false });
+    expect(response.json()).toEqual({ status: 'ok', version: '0.4.3', readOnly: false });
     await app.close();
   });
 
@@ -29,6 +29,8 @@ describe('health and OpenAPI', () => {
     const serviceCall = response.json().components.schemas.ServiceCall;
     expect(serviceCall.required).toEqual(['domain', 'service', 'entity_id']);
     expect(serviceCall.properties.entity_id.type).toBe('array');
+    expect(serviceCall.properties.data.type).toBe('object');
+    expect(serviceCall.properties.data.additionalProperties).toBe(true);
     expect(serviceCall.properties.data_json.type).toBe('string');
     expect(JSON.stringify(serviceCall)).not.toContain('oneOf');
     expect(JSON.stringify(response.json())).not.toContain('HOME_ASSISTANT_TOKEN');

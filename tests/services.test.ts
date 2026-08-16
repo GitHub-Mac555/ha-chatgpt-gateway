@@ -20,6 +20,55 @@ function targetStateResponse(url: string): Response {
   });
 }
 
+function serviceCatalog() {
+  return [
+    {
+      domain: 'light',
+      services: {
+        turn_on: { target: { entity: [{ domain: ['light'] }] } },
+        turn_off: { target: { entity: [{ domain: ['light'] }] } },
+        toggle: { target: { entity: [{ domain: ['light'] }] } },
+      },
+    },
+    {
+      domain: 'climate',
+      services: {
+        set_hvac_mode: { target: { entity: [{ domain: ['climate'] }] } },
+        set_temperature: { target: { entity: [{ domain: ['climate'] }] } },
+        set_fan_mode: { target: { entity: [{ domain: ['climate'] }] } },
+      },
+    },
+    {
+      domain: 'tts',
+      services: {
+        speak: {
+          target: { entity: [{ domain: ['tts'] }] },
+          fields: {
+            media_player_entity_id: {
+              selector: { entity: { domain: ['media_player'], multiple: false } },
+            },
+          },
+        },
+        google_say: {
+          target: {},
+          fields: { entity_id: { selector: { entity: { domain: 'media_player' } } } },
+        },
+      },
+    },
+    {
+      domain: 'group',
+      services: {
+        set: {
+          target: {},
+          fields: {
+            entities: { selector: { entity: { multiple: true } } },
+          },
+        },
+      },
+    },
+  ];
+}
+
 function mockServiceResponses(
   responses: Array<{ body: unknown; status?: number }> = [{ body: [] }],
 ) {
@@ -27,6 +76,7 @@ function mockServiceResponses(
   return vi.fn<typeof fetch>(async (input) => {
     const url = String(input);
     if (url.includes('/api/states/')) return targetStateResponse(url);
+    if (url.endsWith('/api/services')) return jsonResponse(serviceCatalog());
     const response = responses[serviceResponseIndex++] ?? { body: [] };
     return jsonResponse(response.body, response.status);
   });
@@ -93,6 +143,7 @@ describe('service route', () => {
           last_updated: '2026-08-16T00:00:00Z',
         });
       }
+      if (url.endsWith('/api/services')) return jsonResponse(serviceCatalog());
       return jsonResponse([]);
     });
     const config = makeConfig({
@@ -124,6 +175,7 @@ describe('service route', () => {
           last_updated: '2026-08-16T00:00:00Z',
         });
       }
+      if (url.endsWith('/api/services')) return jsonResponse(serviceCatalog());
       if (url.endsWith('/api/states/light.allowed')) return targetStateResponse(url);
       return jsonResponse([]);
     });
@@ -187,7 +239,7 @@ describe('service route', () => {
     expect(first.statusCode).toBe(200);
     expect(second.statusCode).toBe(429);
     expect(second.headers['serviceratelimit-limit']).toBe('1');
-    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
     await app.close();
   });
 
@@ -234,8 +286,8 @@ describe('service route', () => {
       },
     });
     expect(response.statusCode).toBe(200);
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    const [url, init] = fetchMock.mock.calls[1]!;
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+    const [url, init] = fetchMock.mock.calls[2]!;
     expect(url).toBe('http://homeassistant.local:8123/api/services/light/turn_on');
     expect(init?.method).toBe('POST');
     expect(JSON.parse(String(init?.body))).toEqual({
@@ -261,7 +313,7 @@ describe('service route', () => {
       },
     });
     expect(response.statusCode).toBe(200);
-    const [url, init] = fetchMock.mock.calls[1]!;
+    const [url, init] = fetchMock.mock.calls[2]!;
     expect(url).toBe('http://homeassistant.local:8123/api/services/climate/set_temperature');
     expect(JSON.parse(String(init?.body))).toEqual({
       entity_id: ['climate.bedroom_air_conditioner'],
@@ -334,7 +386,7 @@ describe('service route', () => {
       },
     });
     expect(response.statusCode).toBe(200);
-    const [, init] = fetchMock.mock.calls[2]!;
+    const [, init] = fetchMock.mock.calls[3]!;
     expect(JSON.parse(String(init?.body))).toEqual({
       brightness_pct: 25,
       entity_id: ['light.living_room', 'light.kitchen'],
@@ -435,6 +487,7 @@ describe('service route', () => {
       results: [[{ state: 'cool' }], [{ temperature: 27 }], [{ fan_mode: 'medium' }]],
     });
     expect(fetchMock.mock.calls.map(([url]) => String(url))).toEqual([
+      'http://homeassistant.local:8123/api/services',
       'http://homeassistant.local:8123/api/states/climate.bedroom_air_conditioner',
       'http://homeassistant.local:8123/api/states/climate.bedroom_air_conditioner',
       'http://homeassistant.local:8123/api/states/climate.bedroom_air_conditioner',
@@ -442,6 +495,234 @@ describe('service route', () => {
       'http://homeassistant.local:8123/api/services/climate/set_temperature',
       'http://homeassistant.local:8123/api/services/climate/set_fan_mode',
     ]);
+    await app.close();
+  });
+
+  it('accepts structured service data for multiple compatible entities in an ordered batch', async () => {
+    const fetchMock = mockServiceResponses([{ body: [] }, { body: [] }, { body: [] }]);
+    const config = makeConfig({ allowedDomains: new Set(['climate']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const entityIds = [
+      'climate.living_room_air_conditioner',
+      'climate.bedroom_air_conditioner',
+      'climate.child_bedroom_air_conditioner',
+    ];
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/batch',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        calls: [
+          {
+            domain: 'climate',
+            service: 'set_hvac_mode',
+            entity_id: entityIds,
+            data: { hvac_mode: 'cool' },
+          },
+          {
+            domain: 'climate',
+            service: 'set_temperature',
+            entity_id: entityIds,
+            data: { temperature: 25 },
+          },
+          {
+            domain: 'climate',
+            service: 'set_fan_mode',
+            entity_id: entityIds,
+            data: { fan_mode: 'medium' },
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const serviceCalls = fetchMock.mock.calls.filter(([url]) =>
+      String(url).includes('/api/services/'),
+    );
+    expect(serviceCalls).toHaveLength(3);
+    expect(JSON.parse(String(serviceCalls[0]?.[1]?.body))).toEqual({
+      entity_id: entityIds,
+      hvac_mode: 'cool',
+    });
+    expect(JSON.parse(String(serviceCalls[1]?.[1]?.body))).toEqual({
+      entity_id: entityIds,
+      temperature: 25,
+    });
+    expect(JSON.parse(String(serviceCalls[2]?.[1]?.body))).toEqual({
+      entity_id: entityIds,
+      fan_mode: 'medium',
+    });
+    await app.close();
+  });
+
+  it('validates entity-valued service data before forwarding a complex service call', async () => {
+    const fetchMock = mockServiceResponses();
+    const config = makeConfig({
+      allowedDomains: new Set(['tts', 'media_player']),
+      allowedEntities: new Set(['tts.cloud', 'media_player.kitchen_speaker']),
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        domain: 'tts',
+        service: 'speak',
+        entity_id: ['tts.cloud'],
+        data: {
+          media_player_entity_id: 'media_player.kitchen_speaker',
+          message: 'Dinner is ready.',
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const serviceCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith('/api/services/tts/speak'),
+    );
+    expect(JSON.parse(String(serviceCall?.[1]?.body))).toEqual({
+      entity_id: ['tts.cloud'],
+      media_player_entity_id: 'media_player.kitchen_speaker',
+      message: 'Dinner is ready.',
+    });
+    await app.close();
+  });
+
+  it('rejects an unallowed entity hidden in a dynamic service data field', async () => {
+    const fetchMock = mockServiceResponses();
+    const config = makeConfig({
+      allowedDomains: new Set(['tts', 'media_player']),
+      allowedEntities: new Set(['tts.cloud']),
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        domain: 'tts',
+        service: 'speak',
+        entity_id: ['tts.cloud'],
+        data: {
+          media_player_entity_id: 'media_player.unallowed_speaker',
+          message: 'This must not be sent.',
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      'http://homeassistant.local:8123/api/services/tts/speak',
+    );
+    await app.close();
+  });
+
+  it('supports a legacy service that declares its target as a service entity_id field', async () => {
+    const fetchMock = mockServiceResponses();
+    const config = makeConfig({
+      allowedDomains: new Set(['tts', 'media_player']),
+      allowedEntities: new Set(['media_player.kitchen_speaker']),
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        domain: 'tts',
+        service: 'google_say',
+        entity_id: ['media_player.kitchen_speaker'],
+        data: { message: 'Hello.' },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const serviceCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith('/api/services/tts/google_say'),
+    );
+    expect(JSON.parse(String(serviceCall?.[1]?.body))).toEqual({
+      entity_id: ['media_player.kitchen_speaker'],
+      message: 'Hello.',
+    });
+    await app.close();
+  });
+
+  it('continues to reject Home Assistant services that have no explicit entity target', async () => {
+    const fetchMock = mockServiceResponses();
+    const config = makeConfig({ allowedDomains: new Set(['group']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        domain: 'group',
+        service: 'set',
+        entity_id: ['group.some_group'],
+        data: { object_id: 'some_group', entities: ['light.living_room'] },
+      },
+    });
+
+    expect(response.statusCode).toBe(403);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      'http://homeassistant.local:8123/api/services/group/set',
+    );
+    await app.close();
+  });
+
+  it('rejects unsafe structured data in a batch before it performs any write', async () => {
+    const fetchMock = mockServiceResponses();
+    const config = makeConfig({ allowedDomains: new Set(['climate']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/batch',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        calls: [
+          {
+            domain: 'climate',
+            service: 'set_temperature',
+            entity_id: ['climate.bedroom_air_conditioner'],
+            data: { temperature: 25 },
+          },
+          {
+            domain: 'climate',
+            service: 'set_hvac_mode',
+            entity_id: ['climate.bedroom_air_conditioner'],
+            data: { area_id: 'whole_house' },
+          },
+        ],
+      },
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      'http://homeassistant.local:8123/api/services/climate/set_temperature',
+    );
+    await app.close();
+  });
+
+  it('rejects an Action batch item that mixes structured data and legacy data_json', async () => {
+    const app = await buildApp({ config: makeConfig(), logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/batch',
+      headers: { authorization: `Bearer ${makeConfig().gatewayApiKey}` },
+      payload: {
+        calls: [
+          {
+            domain: 'light',
+            service: 'turn_on',
+            entity_id: ['light.living_room'],
+            data: { brightness_pct: 50 },
+            data_json: '{"brightness_pct":50}',
+          },
+        ],
+      },
+    });
+    expect(response.statusCode).toBe(400);
     await app.close();
   });
 
@@ -466,12 +747,12 @@ describe('service route', () => {
     });
     expect(response.statusCode).toBe(502);
     expect(response.json().error).toBe('home_assistant_error');
-    expect(fetchMock).toHaveBeenCalledTimes(5);
+    expect(fetchMock).toHaveBeenCalledTimes(6);
     await app.close();
   });
 
   it('rejects malformed entities and entity/domain mismatches before contacting Home Assistant', async () => {
-    const fetchMock = vi.fn<typeof fetch>();
+    const fetchMock = mockServiceResponses();
     const config = makeConfig();
     const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
     const malformed = await app.inject({
@@ -488,7 +769,9 @@ describe('service route', () => {
       payload: { domain: 'light', service: 'turn_on', entity_id: 'switch.coffee_machine' },
     });
     expect(mismatch.statusCode).toBe(400);
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      'http://homeassistant.local:8123/api/services/light/turn_on',
+    );
     await app.close();
   });
 });

@@ -239,7 +239,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           operationId: 'callHomeAssistantService',
           summary: 'Call one allowed Home Assistant service for explicit allowed entities',
           description:
-            'This changes Home Assistant state and is disabled when READ_ONLY=true. Pass entity_id as an array even for one entity. For dynamic Home Assistant parameters, put one JSON object in data_json after reading the live service contract. device_id, area_id, label_id, and global calls are intentionally rejected.',
+            'This changes Home Assistant state and is disabled when READ_ONLY=true. Pass entity_id as an array even for one entity. For dynamic Home Assistant parameters, pass a JSON object in data after reading the live service contract. One call may target several compatible explicit entities. device_id, area_id, label_id, and global calls are intentionally rejected.',
           requestBody: {
             required: true,
             content: {
@@ -254,7 +254,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           operationId: 'callHomeAssistantServiceBatch',
           summary: 'Run a short, ordered batch of allowed Home Assistant service calls',
           description:
-            'Use only when one user request needs multiple service calls, such as HVAC mode, temperature, and fan mode. Every call and every entity is validated before execution. Calls run sequentially and stop on the first Home Assistant error; batches are not transactional and cannot roll back an already completed call.',
+            'Use only when one clear user request needs multiple service calls, such as HVAC mode, temperature, and fan mode. Each call can target several compatible explicit entities and can include a structured data object. Every call and every entity is validated before execution. Calls run sequentially and stop on the first Home Assistant error; batches are not transactional and cannot roll back an already completed call.',
           requestBody: {
             required: true,
             content: {
@@ -323,8 +323,18 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
             data_json: {
               type: 'string',
               description:
-                'Optional JSON object of service parameters. Use field names and allowed values from getHomeAssistantServiceContract. Do not include entity_id or target fields here.',
+                'Legacy alternative to data: a JSON object encoded as a string. Prefer the structured data object for GPT Actions. Do not send both data and data_json.',
               examples: ['{"temperature":27}'],
+            },
+            data: {
+              type: 'object',
+              description:
+                'Optional structured Home Assistant service parameters. Use only field names and values returned by getHomeAssistantServiceContract. Do not include entity_id, target, device_id, area_id, or label_id here.',
+              additionalProperties: true,
+              examples: [
+                { hvac_mode: 'cool', temperature: 25, fan_mode: 'medium' },
+                { brightness_pct: 50 },
+              ],
             },
           },
           required: ['domain', 'service', 'entity_id'],
@@ -343,20 +353,29 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
                   {
                     domain: 'climate',
                     service: 'set_hvac_mode',
-                    entity_id: ['climate.bedroom_air_conditioner'],
-                    data_json: '{"hvac_mode":"cool"}',
+                    entity_id: [
+                      'climate.living_room_air_conditioner',
+                      'climate.bedroom_air_conditioner',
+                    ],
+                    data: { hvac_mode: 'cool' },
                   },
                   {
                     domain: 'climate',
                     service: 'set_temperature',
-                    entity_id: ['climate.bedroom_air_conditioner'],
-                    data_json: '{"temperature":27}',
+                    entity_id: [
+                      'climate.living_room_air_conditioner',
+                      'climate.bedroom_air_conditioner',
+                    ],
+                    data: { temperature: 27 },
                   },
                   {
                     domain: 'climate',
                     service: 'set_fan_mode',
-                    entity_id: ['climate.bedroom_air_conditioner'],
-                    data_json: '{"fan_mode":"medium"}',
+                    entity_id: [
+                      'climate.living_room_air_conditioner',
+                      'climate.bedroom_air_conditioner',
+                    ],
+                    data: { fan_mode: 'medium' },
                   },
                 ],
               ],

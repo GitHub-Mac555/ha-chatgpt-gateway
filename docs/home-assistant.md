@@ -12,7 +12,7 @@ Use a gateway-reachable URL. For example, `http://homeassistant.local:8123` may 
 
 Home Assistant, not the gateway, is the source of truth for services and their fields. Use `GET /api/v1/services` to discover services in allowed domains, then `GET /api/v1/services/{domain}/{service}` to read the selected service's live field contract, including examples and selectors when Home Assistant provides them.
 
-GPT Actions call `POST /api/v1/services/call` with `entity_id` as an array and a `data_json` string containing one JSON object. This accommodates all Home Assistant service parameter shapes without exposing a transparent proxy. For a multi-step request, such as mode + temperature + fan mode on climate equipment, use `POST /api/v1/services/batch`; every item must name explicit allowed entities and the batch stops on the first Home Assistant error.
+GPT Actions call `POST /api/v1/services/call` with `entity_id` as an array and a structured `data` object containing the parameters returned by Home Assistant service discovery. This accommodates all Home Assistant service parameter shapes without exposing a transparent proxy. For a multi-step request, such as mode + temperature + fan mode on climate equipment, use `POST /api/v1/services/batch`; every item must name explicit allowed entities and the batch stops on the first Home Assistant error. A batch item can target several compatible entities with the same service data.
 
 ## Energy history and automations
 

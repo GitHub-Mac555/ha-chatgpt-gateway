@@ -81,9 +81,18 @@ export const actionServiceCallSchema = z
     domain: homeAssistantName.transform((value) => value.toLowerCase()),
     service: homeAssistantName.transform((value) => value.toLowerCase()),
     entity_id: actionEntityIdsSchema,
+    data: dataSchema.optional(),
     data_json: dataJsonSchema.optional(),
   })
-  .strict();
+  .strict()
+  .superRefine((value, context) => {
+    if (value.data !== undefined && value.data_json !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Specify data or data_json, not both.',
+      });
+    }
+  });
 
 export const serviceBatchSchema = z
   .object({
