@@ -108,23 +108,32 @@ While `READ_ONLY=true`, use `GET /api/v1/entities` to identify one to three safe
 
 All runtime configuration is provided through environment variables.
 
-| Variable                       | Default                           | Description                                                                            |
-| ------------------------------ | --------------------------------- | -------------------------------------------------------------------------------------- |
-| `PORT`                         | `8787`                            | HTTP port used inside the container                                                    |
-| `HOME_ASSISTANT_URL`           | `http://homeassistant.local:8123` | Home Assistant base URL                                                                |
-| `HOME_ASSISTANT_TOKEN`         | required                          | Home Assistant Long-Lived Access Token                                                 |
-| `GATEWAY_API_KEY`              | one key required                  | Backward-compatible read/write key                                                     |
-| `GATEWAY_READ_API_KEY`         | empty                             | Optional read-only key for discovery and monitoring clients                            |
-| `GATEWAY_WRITE_API_KEY`        | empty                             | Optional read/write key for the GPT Action                                             |
-| `ALLOWED_DOMAINS`              | required                          | Comma-separated Home Assistant domains exposed by the gateway                          |
-| `ALLOWED_ENTITIES`             | empty                             | Exact comma-separated entity allow-list. Empty exposes every entity in allowed domains |
-| `READ_ONLY`                    | `false`                           | When `true`, blocks service calls while keeping read operations available              |
-| `LOG_LEVEL`                    | `info`                            | Fastify/Pino log level                                                                 |
-| `HOME_ASSISTANT_TIMEOUT_MS`    | `10000`                           | Timeout for each REST or internal WebSocket request to Home Assistant                  |
-| `RATE_LIMIT_MAX`               | `120`                             | Requests per source IP in the rate-limit window; `0` disables the in-memory limiter    |
-| `RATE_LIMIT_WINDOW_MS`         | `60000`                           | Rate-limit window in milliseconds                                                      |
-| `SERVICE_RATE_LIMIT_MAX`       | `20`                              | Stricter service-call limit per authenticated key and source IP; `0` disables it       |
-| `SERVICE_RATE_LIMIT_WINDOW_MS` | `60000`                           | Service-call rate-limit window in milliseconds                                         |
+### Connection
+
+- `PORT` — default: `8787`. HTTP port used inside the container.
+- `HOME_ASSISTANT_URL` — required. Home Assistant base URL.
+- `HOME_ASSISTANT_TOKEN` — required. Home Assistant Long-Lived Access Token.
+- `HOME_ASSISTANT_TIMEOUT_MS` — default: `10000`. Timeout in milliseconds for each Home Assistant REST or internal WebSocket request.
+
+### Gateway credentials
+
+- `GATEWAY_API_KEY` — backward-compatible read/write key. Configure this key or at least one scoped key.
+- `GATEWAY_READ_API_KEY` — optional read-only key for discovery and monitoring clients.
+- `GATEWAY_WRITE_API_KEY` — optional read/write key for the GPT Action.
+
+### Policy
+
+- `ALLOWED_DOMAINS` — required. Comma-separated Home Assistant domains exposed by the gateway.
+- `ALLOWED_ENTITIES` — default: empty. Exact comma-separated entity allow-list. An empty value exposes every entity in allowed domains.
+- `READ_ONLY` — default: `false`. When `true`, blocks service calls while keeping read operations available.
+
+### Logging and rate limits
+
+- `LOG_LEVEL` — default: `info`. Fastify/Pino log level.
+- `RATE_LIMIT_MAX` — default: `120`. Requests per source IP in the rate-limit window; `0` disables the in-memory limiter.
+- `RATE_LIMIT_WINDOW_MS` — default: `60000`. Rate-limit window in milliseconds.
+- `SERVICE_RATE_LIMIT_MAX` — default: `20`. Stricter service-call limit per authenticated key and source IP; `0` disables it.
+- `SERVICE_RATE_LIMIT_WINDOW_MS` — default: `60000`. Service-call rate-limit window in milliseconds.
 
 See `.env.example` for the complete template. An empty `ALLOWED_ENTITIES` value is appropriate only for a short, read-only discovery phase. A non-empty allow-list also prevents newly added Home Assistant entities from becoming available automatically.
 
