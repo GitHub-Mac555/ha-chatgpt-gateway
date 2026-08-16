@@ -367,7 +367,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.4.4` completes dynamic Home Assistant service handling by requesting response data automatically for services that require it, such as weather forecasts and calendar event queries. Parameterized and multi-device GPT Action calls continue to use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
+`v0.4.5` keeps the dynamic service handling introduced in v0.4.4 and makes the GPT Action schema compatible with ChatGPT's operation-description import limit. Parameterized and multi-device calls use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally only for filtered area/device registry discovery.
 
 ## License
 
