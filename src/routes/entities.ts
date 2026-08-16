@@ -50,6 +50,13 @@ function toDiscoveryEntity(state: {
     'temperature',
     'hvac_action',
     'hvac_modes',
+    'fan_modes',
+    'swing_modes',
+    'preset_modes',
+    'min_temp',
+    'max_temp',
+    'target_temp_step',
+    'temperature_unit',
     'current_position',
     'assumed_state',
   ];

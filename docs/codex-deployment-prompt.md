@@ -22,7 +22,10 @@ READ_ONLY_INITIAL=true
 
 # Never commit these. Ask me for them only when needed; do not print them in logs or reports.
 HOME_ASSISTANT_TOKEN=<ask me securely>
-GATEWAY_API_KEY=<generate a random value if I do not provide one>
+# Preferred: generate two different random values if I do not provide them.
+GATEWAY_READ_API_KEY=<optional read-only monitoring key>
+GATEWAY_WRITE_API_KEY=<GPT Action key with read/write scope>
+# Legacy alternative: GATEWAY_API_KEY=<read/write key>
 NAS_SSH_PASSWORD=<ask me securely if password authentication is used>
 NAS_SSH_PRIVATE_KEY=<ask me securely if key authentication is used>
 

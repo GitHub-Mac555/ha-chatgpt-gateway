@@ -185,6 +185,8 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
         get: {
           operationId: 'listHomeAssistantServices',
           summary: 'Discover services available in allowed Home Assistant domains',
+          description:
+            'Use this for broad discovery. For a command with parameters, then read the precise service contract for the selected domain and service.',
           parameters: [
             { name: 'domain', in: 'query', schema: { type: 'string', examples: ['light'] } },
           ],
@@ -194,12 +196,50 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           },
         },
       },
+      '/api/v1/services/{domain}/{service}': {
+        get: {
+          operationId: 'getHomeAssistantServiceContract',
+          summary: 'Get the live input contract for one allowed Home Assistant service',
+          description:
+            'Use before a parameterized command. The contract comes from Home Assistant and identifies supported fields, required fields, examples, and selectors for this service.',
+          parameters: [
+            {
+              name: 'domain',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', examples: ['climate'] },
+            },
+            {
+              name: 'service',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', examples: ['set_temperature'] },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Live Home Assistant service contract',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { service: { $ref: '#/components/schemas/ServiceContract' } },
+                    required: ['service'],
+                  },
+                },
+              },
+            },
+            '404': { description: 'Service not found' },
+            ...errorResponses,
+          },
+        },
+      },
       '/api/v1/services/call': {
         post: {
           operationId: 'callHomeAssistantService',
-          summary: 'Call an allowed Home Assistant service for explicit allowed entities',
+          summary: 'Call one allowed Home Assistant service for explicit allowed entities',
           description:
-            'This changes Home Assistant state and is disabled when READ_ONLY=true. An explicit entity_id or target.entity_id is required. device_id, area_id, label_id, and global calls are intentionally rejected.',
+            'This changes Home Assistant state and is disabled when READ_ONLY=true. Pass entity_id as an array even for one entity. For dynamic Home Assistant parameters, put one JSON object in data_json after reading the live service contract. device_id, area_id, label_id, and global calls are intentionally rejected.',
           requestBody: {
             required: true,
             content: {
@@ -209,6 +249,21 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           responses: { '200': { description: 'Service call completed' }, ...errorResponses },
         },
       },
+      '/api/v1/services/batch': {
+        post: {
+          operationId: 'callHomeAssistantServiceBatch',
+          summary: 'Run a short, ordered batch of allowed Home Assistant service calls',
+          description:
+            'Use only when one user request needs multiple service calls, such as HVAC mode, temperature, and fan mode. Every call and every entity is validated before execution. Calls run sequentially and stop on the first Home Assistant error; batches are not transactional and cannot roll back an already completed call.',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/ServiceBatch' } },
+            },
+          },
+          responses: { '200': { description: 'All service calls completed' }, ...errorResponses },
+        },
+      },
     },
     components: {
       securitySchemes: {
@@ -216,7 +271,8 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           type: 'http',
           scheme: 'bearer',
           bearerFormat: 'API key',
-          description: 'Use the GATEWAY_API_KEY only. Do not use a Home Assistant token.',
+          description:
+            'Use GATEWAY_WRITE_API_KEY when scoped credentials are configured, otherwise use the legacy GATEWAY_API_KEY. Do not use a Home Assistant token.',
         },
       },
       schemas: {
@@ -255,36 +311,84 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
         ServiceCall: {
           type: 'object',
           properties: {
-            domain: { type: 'string', examples: ['light'] },
-            service: { type: 'string', examples: ['turn_on'] },
+            domain: { type: 'string', examples: ['climate'] },
+            service: { type: 'string', examples: ['set_temperature'] },
             entity_id: {
-              oneOf: [
-                { type: 'string', examples: ['light.living_room'] },
-                { type: 'array', minItems: 1, maxItems: 50, items: { type: 'string' } },
-              ],
+              type: 'array',
+              minItems: 1,
+              maxItems: 50,
+              items: { type: 'string' },
+              examples: [['climate.bedroom_air_conditioner']],
             },
-            target: {
-              type: 'object',
-              properties: {
-                entity_id: {
-                  oneOf: [
-                    { type: 'string' },
-                    { type: 'array', minItems: 1, maxItems: 50, items: { type: 'string' } },
-                  ],
-                },
-              },
-              required: ['entity_id'],
-              additionalProperties: false,
-            },
-            data: {
-              type: 'object',
-              additionalProperties: true,
-              examples: [{ brightness_pct: 50 }],
+            data_json: {
+              type: 'string',
+              description:
+                'Optional JSON object of service parameters. Use field names and allowed values from getHomeAssistantServiceContract. Do not include entity_id or target fields here.',
+              examples: ['{"temperature":27}'],
             },
           },
-          required: ['domain', 'service'],
-          oneOf: [{ required: ['entity_id'] }, { required: ['target'] }],
+          required: ['domain', 'service', 'entity_id'],
           additionalProperties: false,
+        },
+        ServiceBatch: {
+          type: 'object',
+          properties: {
+            calls: {
+              type: 'array',
+              minItems: 1,
+              maxItems: 10,
+              items: { $ref: '#/components/schemas/ServiceCall' },
+              examples: [
+                [
+                  {
+                    domain: 'climate',
+                    service: 'set_hvac_mode',
+                    entity_id: ['climate.bedroom_air_conditioner'],
+                    data_json: '{"hvac_mode":"cool"}',
+                  },
+                  {
+                    domain: 'climate',
+                    service: 'set_temperature',
+                    entity_id: ['climate.bedroom_air_conditioner'],
+                    data_json: '{"temperature":27}',
+                  },
+                  {
+                    domain: 'climate',
+                    service: 'set_fan_mode',
+                    entity_id: ['climate.bedroom_air_conditioner'],
+                    data_json: '{"fan_mode":"medium"}',
+                  },
+                ],
+              ],
+            },
+          },
+          required: ['calls'],
+          additionalProperties: false,
+        },
+        ServiceContract: {
+          type: 'object',
+          properties: {
+            domain: { type: 'string' },
+            service: { type: 'string' },
+            name: { type: 'string' },
+            description: { type: 'string' },
+            target: { type: 'object', additionalProperties: true },
+            fields: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  name: { type: 'string' },
+                  description: { type: 'string' },
+                  required: { type: 'boolean' },
+                  example: {},
+                  selector: { type: 'object', additionalProperties: true },
+                },
+                required: ['name', 'required'],
+              },
+            },
+          },
+          required: ['domain', 'service', 'fields'],
         },
       },
     },

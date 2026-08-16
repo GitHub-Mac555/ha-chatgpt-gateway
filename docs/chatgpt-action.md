@@ -26,7 +26,7 @@ ChatGPT Action clients require the OpenAPI `servers` origin to match the importe
 
    If the import button does not react, open the URL in a separate browser tab, copy the complete JSON document, and paste it into the schema editor. Do not edit the generated `servers` URL to a different hostname or port.
 
-5. Keep the imported HTTP Bearer security scheme. Enter the value of `GATEWAY_API_KEY` when the editor requests the action credential. If the UI calls it an API key, select the Bearer/Authorization option when offered. Enter the `Bearer ` prefix only when the UI explicitly asks for the full header value; otherwise enter the raw gateway key.
+5. Keep the imported HTTP Bearer security scheme. Enter `GATEWAY_WRITE_API_KEY` when scoped keys are configured, otherwise use the legacy `GATEWAY_API_KEY`. If the UI calls it an API key, select the Bearer/Authorization option when offered. Enter the `Bearer ` prefix only when the UI explicitly asks for the full header value; otherwise enter the raw gateway key. A `GATEWAY_READ_API_KEY` is useful for a separate monitoring client but cannot call services.
 6. Never enter `HOME_ASSISTANT_TOKEN` in ChatGPT. It belongs only in the gateway host's `.env` file.
 7. Save or update the GPT.
 
@@ -40,6 +40,10 @@ Paste and adapt the following into the GPT's **Instructions** field. It delibera
 You are a careful Home Assistant assistant. Use only the configured HA ChatGPT Gateway action for home information and control. Never claim that an action succeeded unless the action response confirms success.
 
 Before controlling a device, discover the relevant entity and available service when they are not already known in the current conversation. Use areas and devices to resolve room requests, then act only on an explicit entity_id returned by the gateway.
+
+For a parameterized command, first read the full entity state to identify its supported capabilities. Then call getHomeAssistantServiceContract for each intended service and use only the returned field names and supported values. Call callHomeAssistantService with entity_id as an array, even for one entity. Put service parameters in data_json as one valid JSON object encoded as a string. Do not put entity_id, target, area_id, device_id, or label_id inside data_json.
+
+When one clear request requires multiple services, use callHomeAssistantServiceBatch only after discovering the contract for every service. Use an ordered batch for related steps such as setting HVAC mode, temperature, and fan mode. A batch stops at the first error and cannot roll back an already completed call, so do not use it for unrelated or ambiguous changes.
 
 For evidence-based energy questions, discover the appliance's power and energy sensors, inspect only the relevant allowed automation configurations, and request the bounded history for each sensor using explicit ISO-8601 start and end times. Check total_points, returned_points, and sampled before interpreting the result. Base conclusions on kWh totals across comparable time periods; do not invent data or infer consumption from a single power spike.
 
@@ -57,20 +61,23 @@ For state-changing actions, briefly state what you are going to do, call the act
 1. Ask the GPT to check gateway health and safe configuration.
 2. Ask it to list entities in `light`, then `switch`.
 3. Ask it to read one chosen harmless device's state.
-4. Ask it to list services for that device's domain.
+4. Ask it to list services for that device's domain, then retrieve one live service contract.
 5. For an allowed sensor, request a short history interval and confirm the returned points are plausible.
 6. For an allowed automation, read its redacted configuration and confirm that it contains no credential values.
 7. With `READ_ONLY=true`, confirm that a write request is blocked.
 8. Add a strict `ALLOWED_ENTITIES` list, change to `READ_ONLY=false`, and test one observed on/off action.
-9. Re-read the state and check the container log if ChatGPT reports an ambiguous result.
+9. For a safe parameterized device, test one `data_json` service call with a documented field and re-read the state.
+10. Re-read the state and check the container log if ChatGPT reports an ambiguous result.
 
 ## Troubleshooting
 
-| Symptom                        | Check                                                                                                                                                                               |
-| ------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| The schema import does nothing | Open `/openapi.json` in another tab and paste its JSON into the editor. Verify the certificate and public reachability.                                                             |
-| ChatGPT ignores the Action     | Confirm the action is saved on the GPT you are actually chatting with; actions are not automatically available in ordinary chats.                                                   |
-| Server-origin warning          | Set `PUBLIC_BASE_URL` to the exact public `https://hostname` origin and use port `443`; restart the gateway.                                                                        |
-| `401 unauthorized`             | Re-enter the gateway API key in the Action. Do not use the Home Assistant token.                                                                                                    |
-| `403 forbidden`                | Review `ALLOWED_DOMAINS`, `ALLOWED_ENTITIES`, and `READ_ONLY`.                                                                                                                      |
-| ChatGPT asks before each write | This is a ChatGPT approval policy. Where available, configure the connected app's permission in ChatGPT settings; some accounts/actions do not expose a persistent approval option. |
+| Symptom                                    | Check                                                                                                                                                                                                      |
+| ------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| The schema import does nothing             | Open `/openapi.json` in another tab and paste its JSON into the editor. Verify the certificate and public reachability.                                                                                    |
+| ChatGPT ignores the Action                 | Confirm the action is saved on the GPT you are actually chatting with; actions are not automatically available in ordinary chats.                                                                          |
+| Server-origin warning                      | Set `PUBLIC_BASE_URL` to the exact public `https://hostname` origin and use port `443`; restart the gateway.                                                                                               |
+| `401 unauthorized`                         | Re-enter the gateway API key in the Action. Do not use the Home Assistant token.                                                                                                                           |
+| `403 forbidden`                            | Review `ALLOWED_DOMAINS`, `ALLOWED_ENTITIES`, and `READ_ONLY`.                                                                                                                                             |
+| ChatGPT says a parameter is unavailable    | Re-import the latest `/openapi.json`, then ask the GPT to read the selected entity and `getHomeAssistantServiceContract` before issuing the command. Use `data_json`, not an invented top-level parameter. |
+| A multi-setting HVAC request is incomplete | The integration may expose separate services for mode, temperature, and fan speed. Ask the GPT to retrieve each contract and use one ordered `callHomeAssistantServiceBatch`.                              |
+| ChatGPT asks before each write             | This is a ChatGPT approval policy. Where available, configure the connected app's permission in ChatGPT settings; some accounts/actions do not expose a persistent approval option.                        |

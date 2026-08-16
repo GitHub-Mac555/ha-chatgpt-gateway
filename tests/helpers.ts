@@ -6,6 +6,13 @@ export function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     homeAssistantUrl: 'http://homeassistant.local:8123',
     homeAssistantToken: 'ha-test-token',
     gatewayApiKey: 'gateway-test-key-1234567890',
+    gatewayCredentials: [
+      {
+        id: 'legacy',
+        key: 'gateway-test-key-1234567890',
+        scopes: new Set(['read', 'write']),
+      },
+    ],
     allowedDomains: new Set(['light', 'switch']),
     allowedEntities: new Set(),
     readOnly: false,
@@ -13,6 +20,8 @@ export function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     homeAssistantTimeoutMs: 10_000,
     rateLimitMax: 0,
     rateLimitWindowMs: 60_000,
+    serviceRateLimitMax: 0,
+    serviceRateLimitWindowMs: 60_000,
     ...overrides,
   };
 }
