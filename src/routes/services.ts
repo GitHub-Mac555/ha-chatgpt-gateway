@@ -1,10 +1,13 @@
 import type { FastifyInstance } from 'fastify';
+import { randomUUID } from 'node:crypto';
 import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
 import type { HomeAssistantServiceDomain } from '../home-assistant/types.js';
 import {
+  adminActionCallSchema,
   resolveServiceData,
   serviceBatchSchema,
+  type AdminActionCallInput,
   serviceCallSchema,
   type ActionServiceCallInput,
   type ServiceCallInput,
@@ -18,6 +21,7 @@ import { invalidRequest } from '../http/errors.js';
 import { hasGatewayScope } from '../security/authentication.js';
 import { createServiceRateLimitHook } from '../security/rate-limit.js';
 import { buildServiceTargetPolicy } from '../security/service-target-policy.js';
+import { isAdminActionAllowed } from '../security/admin-actions.js';
 
 type PreparedServiceCall = {
   domain: string;
@@ -27,7 +31,58 @@ type PreparedServiceCall = {
   returnResponse: boolean;
 };
 
+type ServiceDispatch = {
+  id: string;
+  status: 'queued' | 'completed' | 'failed';
+  createdAt: string;
+  completedAt?: string;
+  error?: 'home_assistant_error';
+};
+
 type ServiceInput = ServiceCallInput | ActionServiceCallInput;
+
+function prepareAdminAction(
+  input: AdminActionCallInput,
+  config: GatewayConfig,
+  client: HomeAssistantClient,
+  services: HomeAssistantServiceDomain[],
+): {
+  call?: Omit<PreparedServiceCall, 'entity_id'>;
+  statusCode?: number;
+  error?: string;
+  message?: string;
+} {
+  if (!isAdminActionAllowed(config, input.domain, input.service)) {
+    return {
+      statusCode: 403,
+      error: 'forbidden',
+      message: 'This Home Assistant administration action is not enabled.',
+    };
+  }
+
+  const definition = client.getServiceDefinition(services, input.domain, input.service);
+  if (!definition) {
+    return {
+      statusCode: 404,
+      error: 'not_found',
+      message: 'The requested Home Assistant service was not found.',
+    };
+  }
+
+  const dataResult = resolveServiceData(input);
+  if (dataResult.error) {
+    return { statusCode: 400, error: 'invalid_request', message: dataResult.error };
+  }
+
+  return {
+    call: {
+      domain: input.domain,
+      service: input.service,
+      data: dataResult.data,
+      returnResponse: definition.response?.optional === false,
+    },
+  };
+}
 
 function validateBasicServiceInput(
   input: ServiceInput,
@@ -189,7 +244,7 @@ async function prepareServiceCall(
 
 function sendPreparedCallError(
   reply: { code(statusCode: number): { send(payload: unknown): unknown } },
-  result: Awaited<ReturnType<typeof prepareServiceCall>>,
+  result: Awaited<ReturnType<typeof prepareServiceCall>> | ReturnType<typeof prepareAdminAction>,
 ) {
   return reply.code(result.statusCode ?? 400).send({
     error: result.error ?? 'invalid_request',
@@ -203,6 +258,53 @@ export async function registerServiceRoutes(
   client: HomeAssistantClient,
 ): Promise<void> {
   const rateLimitServiceCall = createServiceRateLimitHook(config);
+  const dispatches = new Map<string, ServiceDispatch>();
+  let activeDispatches = 0;
+
+  const pruneDispatches = () => {
+    const expiresBefore = Date.now() - 3_600_000;
+    for (const [id, dispatch] of dispatches) {
+      if (dispatch.completedAt && Date.parse(dispatch.completedAt) < expiresBefore)
+        dispatches.delete(id);
+    }
+    while (dispatches.size >= 100) {
+      const completed = [...dispatches.values()].find((dispatch) => Boolean(dispatch.completedAt));
+      if (!completed) break;
+      dispatches.delete(completed.id);
+    }
+  };
+
+  const dispatchServiceCall = (call: PreparedServiceCall): ServiceDispatch | undefined => {
+    pruneDispatches();
+    if (activeDispatches >= config.asyncServiceMaxConcurrent) return undefined;
+
+    const dispatch: ServiceDispatch = {
+      id: randomUUID(),
+      status: 'queued',
+      createdAt: new Date().toISOString(),
+    };
+    dispatches.set(dispatch.id, dispatch);
+    activeDispatches += 1;
+    void client
+      .callService(call, config.homeAssistantAsyncServiceTimeoutMs)
+      .then(() => {
+        dispatch.status = 'completed';
+        dispatch.completedAt = new Date().toISOString();
+      })
+      .catch(() => {
+        dispatch.status = 'failed';
+        dispatch.completedAt = new Date().toISOString();
+        dispatch.error = 'home_assistant_error';
+        app.log.warn(
+          { dispatchId: dispatch.id, domain: call.domain, service: call.service },
+          'Asynchronous Home Assistant service call failed',
+        );
+      })
+      .finally(() => {
+        activeDispatches -= 1;
+      });
+    return dispatch;
+  };
 
   app.post('/api/v1/services/call', async (request, reply) => {
     if (!hasGatewayScope(request, 'write')) {
@@ -232,6 +334,20 @@ export async function registerServiceRoutes(
     const services = await client.getServices();
     const prepared = await prepareServiceCall(bodyResult.data, config, client, services);
     if (!prepared.call) return sendPreparedCallError(reply, prepared);
+
+    if (
+      config.asyncServiceDispatchEnabled &&
+      config.asyncServiceDomains.has(prepared.call.domain)
+    ) {
+      const dispatch = dispatchServiceCall(prepared.call);
+      if (!dispatch) {
+        return reply.code(429).send({
+          error: 'rate_limited',
+          message: 'Too many asynchronous service calls are already running.',
+        });
+      }
+      return reply.code(202).send({ ok: true, accepted: true, dispatch });
+    }
 
     const result = await client.callService(prepared.call);
     return { ok: true, result };
@@ -273,6 +389,16 @@ export async function registerServiceRoutes(
       calls.push(prepared.call);
     }
 
+    if (
+      config.asyncServiceDispatchEnabled &&
+      calls.some((call) => config.asyncServiceDomains.has(call.domain))
+    ) {
+      return reply.code(400).send({
+        error: 'invalid_request',
+        message: 'Asynchronous service domains must be called individually, not in a batch.',
+      });
+    }
+
     const results: unknown[] = [];
     for (const call of calls) {
       // This is deliberately sequential and stops on an upstream error. Home
@@ -281,5 +407,56 @@ export async function registerServiceRoutes(
     }
 
     return { ok: true, results };
+  });
+
+  app.get('/api/v1/service-dispatches/:dispatchId', async (request, reply) => {
+    if (!hasGatewayScope(request, 'write')) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: 'This gateway API key does not have write scope.',
+      });
+    }
+    const dispatchId = (request.params as { dispatchId?: string }).dispatchId;
+    const dispatch = dispatchId ? dispatches.get(dispatchId) : undefined;
+    if (!dispatch) {
+      return reply
+        .code(404)
+        .send({ error: 'not_found', message: 'Service dispatch was not found.' });
+    }
+    return { dispatch };
+  });
+
+  app.post('/api/v1/admin/actions/call', async (request, reply) => {
+    if (!hasGatewayScope(request, 'write')) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: 'This gateway API key does not have write scope.',
+      });
+    }
+    await rateLimitServiceCall(request, reply);
+    if (reply.sent) return;
+    if (config.readOnly) {
+      return reply.code(403).send({
+        error: 'read_only',
+        message: 'Service calls are disabled because READ_ONLY=true.',
+      });
+    }
+
+    const bodyResult = adminActionCallSchema.safeParse(request.body);
+    if (!bodyResult.success) {
+      return reply.code(400).send(invalidRequest(bodyResult.error.issues));
+    }
+    if (!isAdminActionAllowed(config, bodyResult.data.domain, bodyResult.data.service)) {
+      return reply.code(403).send({
+        error: 'forbidden',
+        message: 'This Home Assistant administration action is not enabled.',
+      });
+    }
+    const services = await client.getServices();
+    const prepared = prepareAdminAction(bodyResult.data, config, client, services);
+    if (!prepared.call) return sendPreparedCallError(reply, prepared);
+
+    const result = await client.callService(prepared.call);
+    return { ok: true, result };
   });
 }

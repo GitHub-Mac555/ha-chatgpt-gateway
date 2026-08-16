@@ -246,7 +246,26 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
               'application/json': { schema: { $ref: '#/components/schemas/ServiceCall' } },
             },
           },
-          responses: { '200': { description: 'Service call completed' }, ...errorResponses },
+          responses: {
+            '200': { description: 'Service call completed' },
+            '202': {
+              description: 'Long-running service call queued for asynchronous completion',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      ok: { type: 'boolean' },
+                      accepted: { type: 'boolean' },
+                      dispatch: { $ref: '#/components/schemas/ServiceDispatch' },
+                    },
+                    required: ['ok', 'accepted', 'dispatch'],
+                  },
+                },
+              },
+            },
+            ...errorResponses,
+          },
         },
       },
       '/api/v1/services/batch': {
@@ -262,6 +281,55 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
             },
           },
           responses: { '200': { description: 'All service calls completed' }, ...errorResponses },
+        },
+      },
+      '/api/v1/service-dispatches/{dispatchId}': {
+        get: {
+          operationId: 'getHomeAssistantServiceDispatch',
+          summary: 'Check an asynchronous Home Assistant service call',
+          description:
+            'Use after a service call returns 202. Queued means the gateway started the request; completed or failed is reported when Home Assistant finishes it.',
+          parameters: [
+            {
+              name: 'dispatchId',
+              in: 'path',
+              required: true,
+              schema: { type: 'string', format: 'uuid' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'Asynchronous service status',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { dispatch: { $ref: '#/components/schemas/ServiceDispatch' } },
+                    required: ['dispatch'],
+                  },
+                },
+              },
+            },
+            ...errorResponses,
+          },
+        },
+      },
+      '/api/v1/admin/actions/call': {
+        post: {
+          operationId: 'callHomeAssistantAdminAction',
+          summary: 'Call one explicitly enabled Home Assistant administration action',
+          description:
+            'Available only when ENABLE_ADMIN_ACTIONS=true and the exact action is in ADMIN_ALLOWED_ACTIONS. Use only for deliberate maintenance such as configuration checks, reloads, or restart.',
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': { schema: { $ref: '#/components/schemas/AdminActionCall' } },
+            },
+          },
+          responses: {
+            '200': { description: 'Administration action completed' },
+            ...errorResponses,
+          },
         },
       },
     },
@@ -383,6 +451,35 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           },
           required: ['calls'],
           additionalProperties: false,
+        },
+        AdminActionCall: {
+          type: 'object',
+          properties: {
+            domain: { type: 'string', examples: ['homeassistant'] },
+            service: { type: 'string', examples: ['restart'] },
+            data_json: {
+              type: 'string',
+              description: 'Legacy JSON-object string. Prefer data and do not send both.',
+            },
+            data: {
+              type: 'object',
+              description: 'Optional action parameters returned by the live service contract.',
+              additionalProperties: true,
+            },
+          },
+          required: ['domain', 'service'],
+          additionalProperties: false,
+        },
+        ServiceDispatch: {
+          type: 'object',
+          properties: {
+            id: { type: 'string', format: 'uuid' },
+            status: { type: 'string', enum: ['queued', 'completed', 'failed'] },
+            createdAt: { type: 'string', format: 'date-time' },
+            completedAt: { type: 'string', format: 'date-time' },
+            error: { type: 'string' },
+          },
+          required: ['id', 'status', 'createdAt'],
         },
         ServiceContract: {
           type: 'object',

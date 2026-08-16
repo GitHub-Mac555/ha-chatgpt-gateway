@@ -114,7 +114,12 @@ All runtime configuration is provided through environment variables.
 - `PORT` — default: `8787`. HTTP port used inside the container.
 - `HOME_ASSISTANT_URL` — required. Home Assistant base URL.
 - `HOME_ASSISTANT_TOKEN` — required. Home Assistant Long-Lived Access Token.
-- `HOME_ASSISTANT_TIMEOUT_MS` — default: `10000`. Timeout in milliseconds for each Home Assistant REST or internal WebSocket request.
+- `HOME_ASSISTANT_TIMEOUT_MS` — default: `10000`. Timeout in milliseconds for reads, discovery, and internal WebSocket registry requests.
+- `HOME_ASSISTANT_SERVICE_TIMEOUT_MS` — default: `30000`. Timeout for a normal synchronous Home Assistant service call.
+- `ENABLE_ASYNC_SERVICE_DISPATCH` — default: `false`. Enables prompt `202` responses for long-running, entity-targeted service domains.
+- `ASYNC_SERVICE_DOMAINS` — required when asynchronous dispatch is enabled. A subset of `ALLOWED_DOMAINS`, for example `automation,script`.
+- `HOME_ASSISTANT_ASYNC_SERVICE_TIMEOUT_MS` — default: `1800000`. Background-request timeout; keep it longer than the longest expected automation.
+- `ASYNC_SERVICE_MAX_CONCURRENT` — default: `2`. Maximum concurrently running background service requests.
 
 ### Gateway credentials
 
@@ -128,6 +133,8 @@ All runtime configuration is provided through environment variables.
 - `ALLOWED_DOMAINS` — required. Comma-separated Home Assistant domains exposed by the gateway.
 - `ALLOWED_ENTITIES` — default: empty only while `READ_ONLY=true`. Exact comma-separated entity allow-list. The gateway refuses to start with `READ_ONLY=false` and an empty value.
 - `READ_ONLY` — default: `false`. When `true`, blocks service calls while keeping read operations available.
+- `ENABLE_ADMIN_ACTIONS` — default: `false`. Enables the separate, exact allow-list of target-less maintenance actions.
+- `ADMIN_ALLOWED_ACTIONS` — required when administration actions are enabled. Supported values are `homeassistant.check_config`, `homeassistant.reload_all`, `homeassistant.reload_core_config`, `homeassistant.reload_custom_templates`, `homeassistant.restart`, `automation.reload`, `scene.reload`, and `script.reload`.
 
 ### Logging and rate limits
 
@@ -163,6 +170,8 @@ GET  /api/v1/automations/{entityId}
 
 POST /api/v1/services/call
 POST /api/v1/services/batch
+GET  /api/v1/service-dispatches/{dispatchId}
+POST /api/v1/admin/actions/call
 ```
 
 All `/api/v1/*` endpoints require a configured gateway credential:
@@ -231,7 +240,20 @@ Every target entity must pass the configured policy. Before a write, group-like 
 
 The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Use the documented `entity_id` array and structured `data` object for GPT Actions. A single call can target several compatible allowed entities; when a request needs different services, use an ordered batch. Entity-valued fields advertised by a service contract (for example a TTS media-player field or media-player group members) are also checked against the domain/entity policy. For Home Assistant services that require response data, such as forecasts or calendar queries, the gateway automatically requests the required response. Legacy REST clients may continue to use `target.entity_id` or `data_json`.
 
-Services with no entity target published by Home Assistant remain unavailable. This deliberately excludes broad or global operations even if Home Assistant itself would accept them.
+When `ENABLE_ASYNC_SERVICE_DISPATCH=true`, an individual call in `ASYNC_SERVICE_DOMAINS` returns `202` with a dispatch ID immediately instead of waiting for a long-running action. Query `GET /api/v1/service-dispatches/{dispatchId}` for its eventual gateway-side completion status. `202` means the gateway started the request; it is not a claim that the Home Assistant action has completed. Batches cannot contain asynchronous domains.
+
+Services with no entity target published by Home Assistant remain unavailable, except for the narrow opt-in administration endpoint below. This deliberately excludes broad or global operations even if Home Assistant itself would accept them.
+
+## Home Assistant maintenance actions
+
+Target-less maintenance actions are disabled by default. To enable only reviewed operations, set both variables explicitly:
+
+```env
+ENABLE_ADMIN_ACTIONS=true
+ADMIN_ALLOWED_ACTIONS=homeassistant.check_config,homeassistant.reload_all,homeassistant.restart,automation.reload,scene.reload,script.reload
+```
+
+Then use `POST /api/v1/admin/actions/call` with an exact listed `domain` and `service`, for example `{"domain":"homeassistant","service":"restart"}`. The endpoint still requires a write-capable key, obeys `READ_ONLY`, uses the service rate limit, and rejects every unlisted action. It intentionally does not permit `homeassistant.stop`, target-less turn-on/off operations, or arbitrary global Home Assistant calls.
 
 ## History and automation analysis
 
@@ -367,7 +389,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.4.5` keeps the dynamic service handling introduced in v0.4.4 and makes the GPT Action schema compatible with ChatGPT's operation-description import limit. Parameterized and multi-device calls use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally only for filtered area/device registry discovery.
+`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and an exact allow-list for selected Home Assistant maintenance actions. Parameterized and multi-device calls continue to use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally only for filtered area/device registry discovery.
 
 ## License
 

@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.5.0 — Long-running automations and opt-in administration
+
+### Added
+
+- Adds opt-in asynchronous dispatch for selected entity-targeted domains, so long-running automations and scripts can return promptly with a trackable dispatch status.
+- Adds a separate opt-in administration endpoint for an exact allow-list of safe maintenance actions, including Home Assistant configuration checks, reloads, and restart.
+- Adds an independent timeout for synchronous service calls and a bounded timeout/concurrency limit for asynchronous dispatches.
+
+### Fixed
+
+- Prevents long-running Home Assistant automations from being reported as unavailable solely because they exceed the read-request timeout.
+
 ## v0.4.5 — GPT Action schema compatibility
 
 ### Fixed
