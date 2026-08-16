@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.5 — GPT Action schema compatibility
+
+### Fixed
+
+- Shortens GPT Action operation descriptions to comply with ChatGPT's 300-character import limit.
+- Adds regression coverage that prevents future OpenAPI operation descriptions from exceeding that limit.
+
 ## v0.4.4 — Home Assistant service responses
 
 ### Fixed

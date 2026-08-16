@@ -239,7 +239,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           operationId: 'callHomeAssistantService',
           summary: 'Call one allowed Home Assistant service for explicit allowed entities',
           description:
-            'This changes Home Assistant state and is disabled when READ_ONLY=true. Pass entity_id as an array even for one entity. For dynamic Home Assistant parameters, pass a JSON object in data after reading the live service contract. One call may target several compatible explicit entities. device_id, area_id, label_id, and global calls are intentionally rejected.',
+            'Disabled when READ_ONLY=true. Pass entity_id as an array, read the live contract first, then pass supported parameters in data. One call can target compatible explicit entities. Global, device, area, and label targets are rejected.',
           requestBody: {
             required: true,
             content: {
@@ -254,7 +254,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           operationId: 'callHomeAssistantServiceBatch',
           summary: 'Run a short, ordered batch of allowed Home Assistant service calls',
           description:
-            'Use only when one clear user request needs multiple service calls, such as HVAC mode, temperature, and fan mode. Each call can target several compatible explicit entities and can include a structured data object. Every call and every entity is validated before execution. Calls run sequentially and stop on the first Home Assistant error; batches are not transactional and cannot roll back an already completed call.',
+            'Use for one clear request needing multiple services, such as HVAC mode, temperature, and fan mode. Validate contracts first. Calls run in order and stop on the first error. Batches are not transactional and cannot roll back completed calls.',
           requestBody: {
             required: true,
             content: {

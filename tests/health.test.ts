@@ -8,7 +8,7 @@ describe('health and OpenAPI', () => {
     const app = await buildApp({ config: makeConfig(), logger: false });
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok', version: '0.4.4', readOnly: false });
+    expect(response.json()).toEqual({ status: 'ok', version: '0.4.5', readOnly: false });
     await app.close();
   });
 
@@ -35,6 +35,20 @@ describe('health and OpenAPI', () => {
     expect(JSON.stringify(serviceCall)).not.toContain('oneOf');
     expect(JSON.stringify(response.json())).not.toContain('HOME_ASSISTANT_TOKEN');
     expect(JSON.stringify(response.json())).not.toContain('ha-test-token');
+    const descriptions = Object.values(
+      response.json().paths as Record<string, Record<string, unknown>>,
+    ).flatMap((pathItem) =>
+      Object.values(pathItem).flatMap((operation) => {
+        if (typeof operation !== 'object' || operation === null) {
+          return [];
+        }
+
+        const description = (operation as Record<string, unknown>).description;
+        return typeof description === 'string' ? [description] : [];
+      }),
+    );
+    expect(descriptions).not.toHaveLength(0);
+    expect(descriptions.every((description) => description.length <= 300)).toBe(true);
     await expect(SwaggerParser.validate(response.json())).resolves.toBeDefined();
     await app.close();
   });
