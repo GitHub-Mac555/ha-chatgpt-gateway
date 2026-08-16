@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.4.4 — Home Assistant service responses
+
+### Fixed
+
+- Automatically requests Home Assistant response data for services that require it, such as weather forecasts and calendar event queries.
+- Includes live response capability metadata in service contracts without changing the public target policy.
+
 ## v0.4.3 — Structured GPT Action service data
 
 ### Fixed

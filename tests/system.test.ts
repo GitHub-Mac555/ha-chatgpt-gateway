@@ -123,6 +123,7 @@ describe('system routes and Home Assistant failures', () => {
           set_fan_mode: {
             name: 'Set fan mode',
             description: 'Set the fan mode.',
+            response: { optional: false },
             fields: {
               fan_mode: {
                 description: 'Fan mode to set.',
@@ -152,6 +153,7 @@ describe('system routes and Home Assistant failures', () => {
         name: 'Set fan mode',
         description: 'Set the fan mode.',
         target: {},
+        response: { optional: false },
         fields: [
           {
             name: 'fan_mode',

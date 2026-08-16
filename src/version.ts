@@ -1,2 +1,2 @@
 /** The application version exposed by runtime endpoints and OpenAPI. */
-export const APP_VERSION = '0.4.3';
+export const APP_VERSION = '0.4.4';

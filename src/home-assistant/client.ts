@@ -130,9 +130,10 @@ export class HomeAssistantClient {
   async callService(request: ServiceCallRequest): Promise<unknown> {
     const body: Record<string, unknown> = { ...(request.data ?? {}) };
     body.entity_id = request.entity_id;
+    const query = request.returnResponse ? '?return_response' : '';
 
     return this.request(
-      `/api/services/${encodeURIComponent(request.domain)}/${encodeURIComponent(request.service)}`,
+      `/api/services/${encodeURIComponent(request.domain)}/${encodeURIComponent(request.service)}${query}`,
       {
         method: 'POST',
         body: JSON.stringify(body),

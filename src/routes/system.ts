@@ -41,6 +41,7 @@ function toServiceContract(
     name: definition.name,
     description: definition.description,
     target: definition.target ?? {},
+    response: definition.response,
     fields: Object.entries(definition.fields ?? {}).map(([name, field]) => ({
       name,
       description: field.description,

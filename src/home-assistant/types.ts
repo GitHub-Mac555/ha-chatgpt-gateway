@@ -48,6 +48,7 @@ export interface ServiceCallRequest {
   service: string;
   entity_id: string | string[];
   data?: Record<string, unknown>;
+  returnResponse?: boolean;
 }
 
 export interface HomeAssistantArea {
