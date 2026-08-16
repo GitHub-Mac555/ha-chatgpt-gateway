@@ -136,6 +136,7 @@ All runtime configuration is provided through environment variables.
 - `RATE_LIMIT_WINDOW_MS` — default: `60000`. Rate-limit window in milliseconds.
 - `SERVICE_RATE_LIMIT_MAX` — default: `20`. Stricter service-call limit per authenticated key and source IP; `0` disables it.
 - `SERVICE_RATE_LIMIT_WINDOW_MS` — default: `60000`. Service-call rate-limit window in milliseconds.
+- `TRUSTED_PROXIES` — default: empty (trust nobody). Comma-separated reverse-proxy peer IPs or CIDRs allowed to supply forwarding headers. Configure it only after verifying the peer address seen by the container; this preserves independent client rate-limit buckets behind a proxy without trusting headers sent directly by Internet clients.
 
 See `.env.example` for the complete template. An empty `ALLOWED_ENTITIES` value is appropriate only for a short, read-only discovery phase. A non-empty allow-list also prevents newly added Home Assistant entities from becoming available automatically.
 
@@ -291,6 +292,8 @@ Do not expose port `8787` directly to the Internet unless you intentionally term
 
 Place the gateway behind an HTTPS reverse proxy such as Caddy, Nginx, Nginx Proxy Manager, Traefik, a NAS reverse proxy, or an equivalent TLS ingress.
 
+When a proxy is used, configure the exact proxy peer in `TRUSTED_PROXIES` so Fastify can safely resolve the real client IP for rate limiting. Leave it empty for direct connections. Never use a universal CIDR or `trustProxy: true`.
+
 See [docs/reverse-proxy.md](docs/reverse-proxy.md).
 
 ## Docker images
@@ -360,7 +363,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.4.1` hardens the gateway: the general rate limiter runs before authentication, configured gateway keys use a strict 256-bit hexadecimal format, and write-enabled deployments require a non-empty entity allow-list. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
+`v0.4.2` adds restrictive, proxy-aware rate limiting: only explicitly configured proxy peers can supply client-forwarding headers, so clients behind a reverse proxy retain separate rate-limit buckets without allowing direct-header spoofing. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
 
 ## License
 

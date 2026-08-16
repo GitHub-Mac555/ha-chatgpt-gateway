@@ -17,6 +17,7 @@
 - keep `.env` out of version control;
 - run the container as an unprivileged user;
 - do not expose Home Assistant itself merely to make this gateway work.
+- leave `TRUSTED_PROXIES` empty unless an HTTPS reverse proxy is in front of the gateway, then trust only the exact peer IP or the narrowest verified CIDR.
 
 ## Safe rollout sequence
 
@@ -48,5 +49,7 @@ For GPT Actions, parameterized service data is sent as a `data_json` string cont
 An allowed script, scene, or automation can itself produce indirect effects outside the entity targeted by its own service call. The gateway cannot safely infer all of those internal effects at runtime. Treat permission to run one of these entities as permission for its complete Home Assistant behavior, and do not grant them to a write-capable key unless that behavior has been reviewed.
 
 An in-memory per-client rate limiter runs before authentication on every protected API request, including missing, malformed, and invalid Bearer credentials. Configure it with `RATE_LIMIT_MAX` and `RATE_LIMIT_WINDOW_MS`, or set `RATE_LIMIT_MAX=0` only when another trusted limiter protects the endpoint. The separate service-call limiter protects writes with `SERVICE_RATE_LIMIT_MAX` and `SERVICE_RATE_LIMIT_WINDOW_MS`. Home Assistant requests have a bounded timeout controlled by `HOME_ASSISTANT_TIMEOUT_MS`.
+
+`TRUSTED_PROXIES` controls Fastify's native `trustProxy` setting. It is empty by default, so forwarded headers from a direct client are ignored and the socket peer remains the rate-limit identity. When an exact proxy peer IP or verified CIDR is configured, Fastify walks only that trusted forwarding chain and uses the first untrusted address as `request.ip`; both the general limiter and the credential-plus-client service limiter then use the real client address. A trusted proxy must set or preserve `X-Forwarded-For` correctly. Never configure universal trust, and do not trust a forwarded header merely because it arrived from the Internet.
 
 Fastify request logs contain request IDs, method, route, status, and duration. The application never logs the Home Assistant token, gateway key, or Authorization header; error responses are deliberately generic and do not include upstream response bodies.

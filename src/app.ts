@@ -25,6 +25,8 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
   const app = Fastify({
     logger: options.logger === false ? false : { level: options.config.logLevel },
     bodyLimit: 1024 * 1024,
+    trustProxy:
+      options.config.trustedProxies.length > 0 ? [...options.config.trustedProxies] : false,
   });
 
   const client = new HomeAssistantClient(

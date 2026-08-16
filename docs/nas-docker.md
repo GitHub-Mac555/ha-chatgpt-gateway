@@ -39,6 +39,8 @@ ALLOWED_ENTITIES=
 READ_ONLY=true
 
 PUBLIC_BASE_URL=https://ha-gateway.example.com
+# Keep empty until the reverse-proxy peer seen by this container is verified.
+TRUSTED_PROXIES=
 ```
 
 Protect the file:
@@ -71,7 +73,7 @@ Restart only this project:
 docker compose up -d
 ```
 
-After verified reads, change `READ_ONLY=false` only if control is needed. See [reverse-proxy.md](reverse-proxy.md) for public HTTPS and router forwarding.
+After verified reads, change `READ_ONLY=false` only if control is needed. See [reverse-proxy.md](reverse-proxy.md) for public HTTPS, trusted-proxy configuration, and router forwarding.
 
 ## Updates
 
