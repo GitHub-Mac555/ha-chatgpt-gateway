@@ -19,6 +19,8 @@ PUBLIC_GATEWAY_HOSTNAME=ha-gateway.example.com
 SAFE_ALLOWED_DOMAINS=light,switch
 SAFE_ALLOWED_ENTITIES=               # leave blank for read-only discovery; then replace with selected safe IDs
 READ_ONLY_INITIAL=true
+# Leave empty until the reverse-proxy peer seen by the container is verified.
+TRUSTED_PROXIES=
 
 # Never commit these. Ask me for them only when needed; do not print them in logs or reports.
 HOME_ASSISTANT_TOKEN=<ask me securely>
@@ -36,7 +38,7 @@ NAS_SSH_PRIVATE_KEY=<ask me securely if key authentication is used>
 3. Inspect the NAS before changing it: uname -a, id, Docker version, Docker Compose version, docker ps, docker compose ls, existing Docker directory conventions, and existing reverse-proxy infrastructure. Do not stop, remove, or modify unrelated containers, networks, volumes, or proxy routes.
 4. Deploy only this project at NAS_PROJECT_DIR. Prefer ghcr.io/aferende/ha-chatgpt-gateway:latest when DEPLOYMENT_MODE=ghcr. Create a local .env with chmod 600. Never write secrets into the repository, GitHub Actions, logs, public documentation, or the final report.
 5. Start with READ_ONLY=true, SAFE_ALLOWED_DOMAINS, and the smallest safe policy. Use entity discovery to identify harmless devices such as a test lamp. Do not initially permit locks, alarms, doors, gates, covers, security scripts, climate/heating, appliances, or infrastructure plugs.
-6. Configure or reuse an HTTPS reverse proxy at PUBLIC_GATEWAY_HOSTNAME on port 443, forwarding only to the gateway local port 8787. Set PUBLIC_BASE_URL=https://PUBLIC_GATEWAY_HOSTNAME. Do not expose Home Assistant port 8123 or plain gateway port 8787 to the Internet.
+6. Configure or reuse an HTTPS reverse proxy at PUBLIC_GATEWAY_HOSTNAME on port 443, forwarding only to the gateway local port 8787. Set PUBLIC_BASE_URL=https://PUBLIC_GATEWAY_HOSTNAME. Before enabling proxy trust, make a harmless proxied request, inspect the gateway container's reported remote peer, and set TRUSTED_PROXIES only to that exact IP or the narrowest verified CIDR. Do not use universal trust. Do not expose Home Assistant port 8123 or plain gateway port 8787 to the Internet.
 7. If an inbound router rule is needed, do not attempt to access the router. Tell me to create TCP external 443 -> NAS_HOST internal 443, explain how to test it from an external network, and wait for my confirmation. If the ISP uses CGNAT, propose an outbound tunnel or VPS reverse proxy instead.
 8. Verify externally: HTTPS certificate, /health, /openapi.json, and that the OpenAPI servers URL equals https://PUBLIC_GATEWAY_HOSTNAME with no port suffix. Verify that no secret appears in the schema.
 9. Give me exact generic steps to create a personal ChatGPT GPT, import https://PUBLIC_GATEWAY_HOSTNAME/openapi.json, configure the gateway API key as Bearer authentication, and paste safe English GPT Instructions. Do not use or publish personal ChatGPT links.

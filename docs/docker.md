@@ -77,7 +77,7 @@ docker logs --tail=100 ha-chatgpt-gateway
 curl --fail http://localhost:8787/health
 ```
 
-Do not publish port `8787` directly to the Internet. Place it behind the HTTPS reverse proxy described in [reverse-proxy.md](reverse-proxy.md). If the proxy runs on the same host, it can target `127.0.0.1:8787`; otherwise restrict firewall access to the proxy host or trusted LAN.
+Do not publish port `8787` directly to the Internet. Place it behind the HTTPS reverse proxy described in [reverse-proxy.md](reverse-proxy.md). If the proxy runs on the same host, it can target `127.0.0.1:8787`; otherwise restrict firewall access to the proxy host or trusted LAN. Configure `TRUSTED_PROXIES` only after verifying the peer address the container receives from that proxy.
 
 ## Updating
 

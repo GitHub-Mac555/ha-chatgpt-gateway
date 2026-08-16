@@ -191,6 +191,33 @@ describe('service route', () => {
     await app.close();
   });
 
+  it('uses the real client address for service limits behind a trusted proxy', async () => {
+    const fetchMock = mockServiceResponses();
+    const config = makeConfig({
+      serviceRateLimitMax: 1,
+      serviceRateLimitWindowMs: 60_000,
+      trustedProxies: ['127.0.0.1'],
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const payload = { domain: 'light', service: 'turn_on', entity_id: ['light.living_room'] };
+    const request = (clientIp: string) =>
+      app.inject({
+        method: 'POST',
+        url: '/api/v1/services/call',
+        remoteAddress: '127.0.0.1',
+        headers: {
+          authorization: `Bearer ${config.gatewayApiKey}`,
+          'x-forwarded-for': clientIp,
+        },
+        payload,
+      });
+
+    expect((await request('203.0.113.10')).statusCode).toBe(200);
+    expect((await request('203.0.113.10')).statusCode).toBe(429);
+    expect((await request('203.0.113.11')).statusCode).toBe(200);
+    await app.close();
+  });
+
   it('forwards an allowed service call to Home Assistant', async () => {
     const fetchMock = mockServiceResponses();
     const config = makeConfig();

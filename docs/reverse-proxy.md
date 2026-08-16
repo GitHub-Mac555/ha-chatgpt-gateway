@@ -26,6 +26,43 @@ or to the Docker host's LAN address and mapped port when the proxy runs on anoth
 
 This works with Synology Reverse Proxy, Nginx, Nginx Proxy Manager, Caddy, Traefik, or an equivalent secure ingress. The exact UI differs, but the source/destination rule is the same.
 
+## Trusted proxy configuration
+
+The gateway's per-client rate limit uses Fastify's `request.ip`. With no trusted proxy configured, that is the TCP socket peer and forwarding headers are ignored. This is secure for direct access, but a reverse proxy then makes its own address the shared rate-limit bucket.
+
+```text
+Internet -> trusted reverse proxy -> Fastify trustProxy -> request.ip = real client -> per-client rate limit
+```
+
+Set `TRUSTED_PROXIES` only to reverse-proxy peers that actually connect to the container. It accepts a comma-separated list of IPv4 addresses, IPv6 addresses, or CIDRs:
+
+```env
+# Default: trust nobody; forwarded headers are not authoritative.
+TRUSTED_PROXIES=
+
+# Same-host proxy only when the container really sees this peer.
+TRUSTED_PROXIES=127.0.0.1
+
+# Explicit proxy peers or a verified narrow network range.
+TRUSTED_PROXIES=127.0.0.1,192.0.2.50,2001:db8::50,192.0.2.0/28
+```
+
+Do **not** use `trustProxy: true`, `0.0.0.0/0`, `::/0`, or a broad private subnet merely for convenience. Direct clients must never be able to choose their rate-limit identity by sending `X-Forwarded-For`, `Forwarded`, or `X-Real-IP`.
+
+### Synology Reverse Proxy on the same NAS
+
+For a Synology reverse-proxy rule targeting the same host, `TRUSTED_PROXIES=127.0.0.1` is correct only if the gateway container really sees `127.0.0.1` as the peer. Docker bridge networking commonly presents the host bridge address instead.
+
+Before enabling trust, make one harmless request through the proxy, then inspect only this container's request log:
+
+```bash
+docker compose logs --tail=50 ha-chatgpt-gateway
+```
+
+Use the reported `remoteAddress` as the exact trusted IP. If it is a Docker bridge address and can change, inspect the gateway project's Docker network with `docker network inspect`; use only the smallest stable CIDR that contains the proxy peer. Do not trust an entire LAN or Docker address range without verifying that every possible sender is an intended proxy. Restart only this Compose project after changing `.env`.
+
+The reverse proxy must set or preserve the actual client `X-Forwarded-For` chain. With a configured trusted peer, Fastify resolves that chain conservatively; with an untrusted peer, it ignores it.
+
 ### Synology Reverse Proxy example
 
 In **Control Panel → Login Portal → Advanced → Reverse Proxy**, add a new rule:

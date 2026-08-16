@@ -44,6 +44,33 @@ describe('configuration', () => {
     expect(loadConfig({ ...commonEnv, GATEWAY_API_KEY: key }).gatewayApiKey).toBe(key);
   });
 
+  it('defaults to trusting no reverse proxies', () => {
+    const config = loadConfig({ ...commonEnv, GATEWAY_API_KEY: strongKey() });
+    expect(config.trustedProxies).toEqual([]);
+  });
+
+  it('accepts explicit IPv4, IPv6, and CIDR trusted proxies', () => {
+    const config = loadConfig({
+      ...commonEnv,
+      GATEWAY_API_KEY: strongKey(),
+      TRUSTED_PROXIES: '127.0.0.1,2001:db8::1,192.168.10.0/24',
+    });
+    expect(config.trustedProxies).toEqual(['127.0.0.1', '2001:db8::1', '192.168.10.0/24']);
+  });
+
+  it.each(['not-an-ip', '999.999.999.999', '192.168.1.1/999'])(
+    'rejects an invalid trusted proxy value: %s',
+    (trustedProxy) => {
+      expect(() =>
+        loadConfig({
+          ...commonEnv,
+          GATEWAY_API_KEY: strongKey(),
+          TRUSTED_PROXIES: trustedProxy,
+        }),
+      ).toThrow(/TRUSTED_PROXIES/);
+    },
+  );
+
   it('rejects duplicate configured gateway keys', () => {
     const key = strongKey();
     expect(() =>

@@ -24,6 +24,7 @@ export function makeConfig(overrides: Partial<GatewayConfig> = {}): GatewayConfi
     rateLimitWindowMs: 60_000,
     serviceRateLimitMax: 0,
     serviceRateLimitWindowMs: 60_000,
+    trustedProxies: [],
     ...overrides,
   };
 }

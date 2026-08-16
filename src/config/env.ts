@@ -1,3 +1,4 @@
+import proxyaddr from '@fastify/proxy-addr';
 import { z } from 'zod';
 
 const booleanFromString = z
@@ -32,6 +33,7 @@ const envSchema = z
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
     SERVICE_RATE_LIMIT_MAX: z.coerce.number().int().min(0).max(10_000).default(20),
     SERVICE_RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
+    TRUSTED_PROXIES: z.string().default(''),
     PUBLIC_BASE_URL: z.string().url().optional(),
   })
   .superRefine((value, context) => {
@@ -64,6 +66,16 @@ const envSchema = z
         message: 'READ_ONLY=false requires a non-empty ALLOWED_ENTITIES allow-list.',
       });
     }
+
+    try {
+      proxyaddr.compile([...parseCsv(value.TRUSTED_PROXIES)]);
+    } catch {
+      context.addIssue({
+        code: 'custom',
+        path: ['TRUSTED_PROXIES'],
+        message: 'TRUSTED_PROXIES must contain only valid IP addresses or CIDR ranges.',
+      });
+    }
   });
 
 export type GatewayScope = 'read' | 'write';
@@ -90,6 +102,8 @@ export interface GatewayConfig {
   rateLimitWindowMs: number;
   serviceRateLimitMax: number;
   serviceRateLimitWindowMs: number;
+  /** Explicit reverse-proxy peers trusted to supply forwarding headers. */
+  trustedProxies: readonly string[];
   publicBaseUrl?: string;
 }
 
@@ -144,6 +158,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     rateLimitWindowMs: parsed.RATE_LIMIT_WINDOW_MS,
     serviceRateLimitMax: parsed.SERVICE_RATE_LIMIT_MAX,
     serviceRateLimitWindowMs: parsed.SERVICE_RATE_LIMIT_WINDOW_MS,
+    trustedProxies: [...parseCsv(parsed.TRUSTED_PROXIES)],
     publicBaseUrl: parsed.PUBLIC_BASE_URL?.replace(/\/$/, ''),
   };
 }
