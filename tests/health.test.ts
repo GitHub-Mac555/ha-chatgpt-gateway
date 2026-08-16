@@ -8,7 +8,7 @@ describe('health and OpenAPI', () => {
     const app = await buildApp({ config: makeConfig(), logger: false });
     const response = await app.inject({ method: 'GET', url: '/health' });
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toEqual({ status: 'ok', version: '0.4.5', readOnly: false });
+    expect(response.json()).toEqual({ status: 'ok', version: '0.5.0', readOnly: false });
     await app.close();
   });
 
@@ -19,6 +19,8 @@ describe('health and OpenAPI', () => {
     expect(response.json().openapi).toBe('3.1.0');
     expect(response.json().paths['/api/v1/services/call']).toBeDefined();
     expect(response.json().paths['/api/v1/services/batch']).toBeDefined();
+    expect(response.json().paths['/api/v1/service-dispatches/{dispatchId}']).toBeDefined();
+    expect(response.json().paths['/api/v1/admin/actions/call']).toBeDefined();
     expect(response.json().paths['/api/v1/services/{domain}/{service}']).toBeDefined();
     expect(response.json().paths['/api/v1/areas']).toBeDefined();
     expect(response.json().paths['/api/v1/entities/{entityId}/history']).toBeDefined();
@@ -32,6 +34,10 @@ describe('health and OpenAPI', () => {
     expect(serviceCall.properties.data.type).toBe('object');
     expect(serviceCall.properties.data.additionalProperties).toBe(true);
     expect(serviceCall.properties.data_json.type).toBe('string');
+    expect(response.json().components.schemas.AdminActionCall.required).toEqual([
+      'domain',
+      'service',
+    ]);
     expect(JSON.stringify(serviceCall)).not.toContain('oneOf');
     expect(JSON.stringify(response.json())).not.toContain('HOME_ASSISTANT_TOKEN');
     expect(JSON.stringify(response.json())).not.toContain('ha-test-token');

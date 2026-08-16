@@ -76,6 +76,24 @@ function serviceCatalog() {
         },
       },
     },
+    {
+      domain: 'automation',
+      services: {
+        trigger: {
+          target: { entity: [{ domain: ['automation'] }] },
+          fields: { skip_condition: { selector: { boolean: {} } } },
+        },
+        reload: { target: {} },
+      },
+    },
+    {
+      domain: 'homeassistant',
+      services: {
+        check_config: { target: {} },
+        restart: { target: {} },
+        stop: { target: {} },
+      },
+    },
   ];
 }
 
@@ -812,6 +830,129 @@ describe('service route', () => {
     expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
       'http://homeassistant.local:8123/api/services/light/turn_on',
     );
+    await app.close();
+  });
+
+  it('queues long-running allowed automation calls without waiting for their completion', async () => {
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = String(input);
+      if (url.endsWith('/api/services')) return Promise.resolve(jsonResponse(serviceCatalog()));
+      if (url.endsWith('/api/states/automation.bedtime')) {
+        return Promise.resolve(targetStateResponse(url));
+      }
+      if (url.endsWith('/api/services/automation/trigger')) {
+        return new Promise((resolve) => setTimeout(() => resolve(jsonResponse([])), 25));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+    const config = makeConfig({
+      allowedDomains: new Set(['automation']),
+      allowedEntities: new Set(['automation.bedtime']),
+      asyncServiceDispatchEnabled: true,
+      asyncServiceDomains: new Set(['automation']),
+      homeAssistantAsyncServiceTimeoutMs: 100,
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const headers = { authorization: `Bearer ${config.gatewayApiKey}` };
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers,
+      payload: {
+        domain: 'automation',
+        service: 'trigger',
+        entity_id: ['automation.bedtime'],
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.json().accepted).toBe(true);
+    const dispatchId = response.json().dispatch.id;
+    await vi.waitFor(() =>
+      expect(fetchMock.mock.calls.map(([url]) => String(url))).toContain(
+        'http://homeassistant.local:8123/api/services/automation/trigger',
+      ),
+    );
+    await vi.waitFor(async () => {
+      const status = await app.inject({
+        method: 'GET',
+        url: `/api/v1/service-dispatches/${dispatchId}`,
+        headers,
+      });
+      expect(status.json().dispatch.status).toBe('completed');
+    });
+    await app.close();
+  });
+
+  it('uses the longer service timeout for synchronous service calls', async () => {
+    const fetchMock = vi.fn<typeof fetch>((input) => {
+      const url = String(input);
+      if (url.endsWith('/api/services')) return Promise.resolve(jsonResponse(serviceCatalog()));
+      if (url.endsWith('/api/states/light.living_room')) {
+        return Promise.resolve(targetStateResponse(url));
+      }
+      if (url.endsWith('/api/services/light/turn_on')) {
+        return new Promise((resolve) => setTimeout(() => resolve(jsonResponse([])), 25));
+      }
+      return Promise.resolve(jsonResponse([]));
+    });
+    const config = makeConfig({ homeAssistantTimeoutMs: 10, homeAssistantServiceTimeoutMs: 100 });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: { domain: 'light', service: 'turn_on', entity_id: ['light.living_room'] },
+    });
+    expect(response.statusCode).toBe(200);
+    await app.close();
+  });
+
+  it('allows only exact opt-in Home Assistant administration actions', async () => {
+    const fetchMock = mockServiceResponses();
+    const config = makeConfig({
+      adminActionsEnabled: true,
+      adminAllowedActions: new Set(['homeassistant.restart']),
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const headers = { authorization: `Bearer ${config.gatewayApiKey}` };
+    const restart = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/actions/call',
+      headers,
+      payload: { domain: 'homeassistant', service: 'restart' },
+    });
+    expect(restart.statusCode).toBe(200);
+    const serviceCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).endsWith('/api/services/homeassistant/restart'),
+    );
+    expect(JSON.parse(String(serviceCall?.[1]?.body))).toEqual({});
+
+    const stop = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/actions/call',
+      headers,
+      payload: { domain: 'homeassistant', service: 'stop' },
+    });
+    expect(stop.statusCode).toBe(403);
+    expect(fetchMock.mock.calls.map(([url]) => String(url))).not.toContain(
+      'http://homeassistant.local:8123/api/services/homeassistant/stop',
+    );
+    await app.close();
+  });
+
+  it('keeps target-less administration actions disabled by default', async () => {
+    const fetchMock = vi.fn<typeof fetch>();
+    const config = makeConfig();
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/admin/actions/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: { domain: 'homeassistant', service: 'restart' },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(fetchMock).not.toHaveBeenCalled();
     await app.close();
   });
 });

@@ -41,9 +41,13 @@ export class HomeAssistantClient {
     private readonly webSocketFactory: WebSocketFactory = createNativeWebSocket,
   ) {}
 
-  private async request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  private async request<T>(
+    path: string,
+    init: RequestInit = {},
+    timeoutMs = this.config.homeAssistantTimeoutMs,
+  ): Promise<T> {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), this.config.homeAssistantTimeoutMs);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
     let response: Response;
     try {
@@ -127,9 +131,12 @@ export class HomeAssistantClient {
     return this.request(`/api/config/automation/config/${encodeURIComponent(automationId)}`);
   }
 
-  async callService(request: ServiceCallRequest): Promise<unknown> {
+  async callService(
+    request: ServiceCallRequest,
+    timeoutMs = this.config.homeAssistantServiceTimeoutMs,
+  ): Promise<unknown> {
     const body: Record<string, unknown> = { ...(request.data ?? {}) };
-    body.entity_id = request.entity_id;
+    if (request.entity_id !== undefined) body.entity_id = request.entity_id;
     const query = request.returnResponse ? '?return_response' : '';
 
     return this.request(
@@ -138,6 +145,7 @@ export class HomeAssistantClient {
         method: 'POST',
         body: JSON.stringify(body),
       },
+      timeoutMs,
     );
   }
 

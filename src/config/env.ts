@@ -1,5 +1,6 @@
 import proxyaddr from '@fastify/proxy-addr';
 import { z } from 'zod';
+import { supportedAdminActions } from '../security/admin-actions.js';
 
 const booleanFromString = z
   .enum(['true', 'false'])
@@ -29,6 +30,23 @@ const envSchema = z
     READ_ONLY: booleanFromString,
     LOG_LEVEL: logLevelSchema.default('info'),
     HOME_ASSISTANT_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(10_000),
+    HOME_ASSISTANT_SERVICE_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(100)
+      .max(120_000)
+      .default(30_000),
+    ENABLE_ASYNC_SERVICE_DISPATCH: booleanFromString,
+    ASYNC_SERVICE_DOMAINS: z.string().default(''),
+    HOME_ASSISTANT_ASYNC_SERVICE_TIMEOUT_MS: z.coerce
+      .number()
+      .int()
+      .min(1_000)
+      .max(3_600_000)
+      .default(1_800_000),
+    ASYNC_SERVICE_MAX_CONCURRENT: z.coerce.number().int().min(1).max(10).default(2),
+    ENABLE_ADMIN_ACTIONS: booleanFromString,
+    ADMIN_ALLOWED_ACTIONS: z.string().default(''),
     RATE_LIMIT_MAX: z.coerce.number().int().min(0).max(10_000).default(120),
     RATE_LIMIT_WINDOW_MS: z.coerce.number().int().min(1_000).max(3_600_000).default(60_000),
     SERVICE_RATE_LIMIT_MAX: z.coerce.number().int().min(0).max(10_000).default(20),
@@ -67,6 +85,58 @@ const envSchema = z
       });
     }
 
+    const asyncServiceDomains = parseCsv(value.ASYNC_SERVICE_DOMAINS);
+    if (value.ENABLE_ASYNC_SERVICE_DISPATCH && asyncServiceDomains.size === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ASYNC_SERVICE_DOMAINS'],
+        message: 'ENABLE_ASYNC_SERVICE_DISPATCH=true requires ASYNC_SERVICE_DOMAINS.',
+      });
+    }
+    if (!value.ENABLE_ASYNC_SERVICE_DISPATCH && asyncServiceDomains.size > 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ASYNC_SERVICE_DOMAINS'],
+        message: 'ASYNC_SERVICE_DOMAINS requires ENABLE_ASYNC_SERVICE_DISPATCH=true.',
+      });
+    }
+    for (const domain of asyncServiceDomains) {
+      if (!parseCsv(value.ALLOWED_DOMAINS).has(domain)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['ASYNC_SERVICE_DOMAINS'],
+          message: 'Every ASYNC_SERVICE_DOMAINS entry must also be in ALLOWED_DOMAINS.',
+        });
+        break;
+      }
+    }
+
+    const adminAllowedActions = parseCsv(value.ADMIN_ALLOWED_ACTIONS);
+    if (value.ENABLE_ADMIN_ACTIONS && adminAllowedActions.size === 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ADMIN_ALLOWED_ACTIONS'],
+        message: 'ENABLE_ADMIN_ACTIONS=true requires ADMIN_ALLOWED_ACTIONS.',
+      });
+    }
+    if (!value.ENABLE_ADMIN_ACTIONS && adminAllowedActions.size > 0) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ADMIN_ALLOWED_ACTIONS'],
+        message: 'ADMIN_ALLOWED_ACTIONS requires ENABLE_ADMIN_ACTIONS=true.',
+      });
+    }
+    for (const action of adminAllowedActions) {
+      if (!supportedAdminActions.has(action)) {
+        context.addIssue({
+          code: 'custom',
+          path: ['ADMIN_ALLOWED_ACTIONS'],
+          message: 'ADMIN_ALLOWED_ACTIONS contains an unsupported global action.',
+        });
+        break;
+      }
+    }
+
     try {
       proxyaddr.compile([...parseCsv(value.TRUSTED_PROXIES)]);
     } catch {
@@ -98,6 +168,13 @@ export interface GatewayConfig {
   readOnly: boolean;
   logLevel: z.infer<typeof logLevelSchema>;
   homeAssistantTimeoutMs: number;
+  homeAssistantServiceTimeoutMs: number;
+  asyncServiceDispatchEnabled: boolean;
+  asyncServiceDomains: ReadonlySet<string>;
+  homeAssistantAsyncServiceTimeoutMs: number;
+  asyncServiceMaxConcurrent: number;
+  adminActionsEnabled: boolean;
+  adminAllowedActions: ReadonlySet<string>;
   rateLimitMax: number;
   rateLimitWindowMs: number;
   serviceRateLimitMax: number;
@@ -154,6 +231,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     readOnly: parsed.READ_ONLY,
     logLevel: parsed.LOG_LEVEL,
     homeAssistantTimeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS,
+    homeAssistantServiceTimeoutMs: parsed.HOME_ASSISTANT_SERVICE_TIMEOUT_MS,
+    asyncServiceDispatchEnabled: parsed.ENABLE_ASYNC_SERVICE_DISPATCH,
+    asyncServiceDomains: parseCsv(parsed.ASYNC_SERVICE_DOMAINS),
+    homeAssistantAsyncServiceTimeoutMs: parsed.HOME_ASSISTANT_ASYNC_SERVICE_TIMEOUT_MS,
+    asyncServiceMaxConcurrent: parsed.ASYNC_SERVICE_MAX_CONCURRENT,
+    adminActionsEnabled: parsed.ENABLE_ADMIN_ACTIONS,
+    adminAllowedActions: parseCsv(parsed.ADMIN_ALLOWED_ACTIONS),
     rateLimitMax: parsed.RATE_LIMIT_MAX,
     rateLimitWindowMs: parsed.RATE_LIMIT_WINDOW_MS,
     serviceRateLimitMax: parsed.SERVICE_RATE_LIMIT_MAX,

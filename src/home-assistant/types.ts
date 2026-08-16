@@ -46,7 +46,7 @@ export interface HomeAssistantConfig {
 export interface ServiceCallRequest {
   domain: string;
   service: string;
-  entity_id: string | string[];
+  entity_id?: string | string[];
   data?: Record<string, unknown>;
   returnResponse?: boolean;
 }

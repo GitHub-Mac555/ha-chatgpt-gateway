@@ -175,6 +175,44 @@ describe('system routes and Home Assistant failures', () => {
     await app.close();
   });
 
+  it('discovers only explicitly enabled administration actions outside normal domains', async () => {
+    const fetchMock = vi.fn<typeof fetch>(() =>
+      jsonResponse([
+        {
+          domain: 'homeassistant',
+          services: {
+            check_config: { name: 'Check configuration' },
+            restart: { name: 'Restart' },
+            stop: { name: 'Stop' },
+          },
+        },
+      ]),
+    );
+    const config = makeConfig({
+      adminActionsEnabled: true,
+      adminAllowedActions: new Set(['homeassistant.check_config', 'homeassistant.restart']),
+    });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const headers = { authorization: `Bearer ${config.gatewayApiKey}` };
+    const services = await app.inject({
+      method: 'GET',
+      url: '/api/v1/services?domain=homeassistant',
+      headers,
+    });
+    expect(services.statusCode).toBe(200);
+    expect(Object.keys(services.json().domains[0].services).sort()).toEqual([
+      'check_config',
+      'restart',
+    ]);
+    const contract = await app.inject({
+      method: 'GET',
+      url: '/api/v1/services/homeassistant/restart',
+      headers,
+    });
+    expect(contract.statusCode).toBe(200);
+    await app.close();
+  });
+
   it.each([
     [401, 502, 'home_assistant_error'],
     [404, 404, 'not_found'],

@@ -107,4 +107,71 @@ describe('configuration', () => {
   it('requires at least one gateway API key', () => {
     expect(() => loadConfig(commonEnv)).toThrow(/GATEWAY_API_KEY/);
   });
+
+  it('requires an enabled, domain-scoped configuration for asynchronous dispatch', () => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ASYNC_SERVICE_DISPATCH: 'true',
+      }),
+    ).toThrow(/ASYNC_SERVICE_DOMAINS/);
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ASYNC_SERVICE_DOMAINS: 'automation',
+      }),
+    ).toThrow(/ENABLE_ASYNC_SERVICE_DISPATCH/);
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ASYNC_SERVICE_DISPATCH: 'true',
+        ASYNC_SERVICE_DOMAINS: 'automation',
+      }),
+    ).toThrow(/also be in ALLOWED_DOMAINS/);
+    expect(
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ALLOWED_DOMAINS: 'light,switch,automation',
+        ENABLE_ASYNC_SERVICE_DISPATCH: 'true',
+        ASYNC_SERVICE_DOMAINS: 'automation',
+      }).asyncServiceDomains,
+    ).toEqual(new Set(['automation']));
+  });
+
+  it('requires an exact supported allow-list for administration actions', () => {
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ADMIN_ACTIONS: 'true',
+      }),
+    ).toThrow(/ADMIN_ALLOWED_ACTIONS/);
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ADMIN_ALLOWED_ACTIONS: 'homeassistant.restart',
+      }),
+    ).toThrow(/ENABLE_ADMIN_ACTIONS/);
+    expect(() =>
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ADMIN_ACTIONS: 'true',
+        ADMIN_ALLOWED_ACTIONS: 'homeassistant.stop',
+      }),
+    ).toThrow(/unsupported global action/);
+    expect(
+      loadConfig({
+        ...commonEnv,
+        GATEWAY_API_KEY: strongKey(),
+        ENABLE_ADMIN_ACTIONS: 'true',
+        ADMIN_ALLOWED_ACTIONS: 'homeassistant.check_config,homeassistant.restart',
+      }).adminAllowedActions,
+    ).toEqual(new Set(['homeassistant.check_config', 'homeassistant.restart']));
+  });
 });

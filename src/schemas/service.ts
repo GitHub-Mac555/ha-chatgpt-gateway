@@ -103,6 +103,26 @@ export const serviceBatchSchema = z
 export type ActionServiceCallInput = z.infer<typeof actionServiceCallSchema>;
 export type ServiceBatchInput = z.infer<typeof serviceBatchSchema>;
 
+/** Target-less, explicitly configured Home Assistant administration actions. */
+export const adminActionCallSchema = z
+  .object({
+    domain: homeAssistantName.transform((value) => value.toLowerCase()),
+    service: homeAssistantName.transform((value) => value.toLowerCase()),
+    data: dataSchema.optional(),
+    data_json: dataJsonSchema.optional(),
+  })
+  .strict()
+  .superRefine((value, context) => {
+    if (value.data !== undefined && value.data_json !== undefined) {
+      context.addIssue({
+        code: 'custom',
+        message: 'Specify data or data_json, not both.',
+      });
+    }
+  });
+
+export type AdminActionCallInput = z.infer<typeof adminActionCallSchema>;
+
 const forbiddenDataKeys = new Set([
   'entity_id',
   'target',

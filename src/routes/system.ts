@@ -5,6 +5,7 @@ import type { HomeAssistantServiceDefinition } from '../home-assistant/types.js'
 import { z } from 'zod';
 import { invalidRequest } from '../http/errors.js';
 import { isEntityAllowed } from '../security/authorization.js';
+import { isAdminActionAllowed } from '../security/admin-actions.js';
 
 const serviceQuerySchema = z.object({
   domain: z
@@ -52,6 +53,10 @@ function toServiceContract(
   };
 }
 
+function isServiceDiscoverable(config: GatewayConfig, domain: string, service: string): boolean {
+  return config.allowedDomains.has(domain) || isAdminActionAllowed(config, domain, service);
+}
+
 export async function registerSystemRoutes(
   app: FastifyInstance,
   config: GatewayConfig,
@@ -71,6 +76,9 @@ export async function registerSystemRoutes(
         read_only: config.readOnly,
         allowed_domains: [...config.allowedDomains].sort(),
         entity_allowlist_enabled: config.allowedEntities.size > 0,
+        async_service_dispatch_enabled: config.asyncServiceDispatchEnabled,
+        admin_actions_enabled: config.adminActionsEnabled,
+        admin_allowed_actions: [...config.adminAllowedActions].sort(),
       },
     };
   });
@@ -81,16 +89,33 @@ export async function registerSystemRoutes(
       return reply.code(400).send(invalidRequest(parsedQuery.error.issues));
     }
     const requestedDomain = parsedQuery.data.domain;
-    if (requestedDomain && !config.allowedDomains.has(requestedDomain)) {
+    const services = await client.getServices();
+
+    if (
+      requestedDomain &&
+      !services.some(
+        ({ domain, services: domainServices }) =>
+          domain.toLowerCase() === requestedDomain &&
+          Object.keys(domainServices).some((service) =>
+            isServiceDiscoverable(config, domain.toLowerCase(), service),
+          ),
+      )
+    ) {
       return reply.code(403).send({ error: 'forbidden', message: 'Domain is not allowed.' });
     }
-    const services = await client.getServices();
 
     return {
       domains: services
-        .filter(({ domain }) => config.allowedDomains.has(domain.toLowerCase()))
-        .filter(({ domain }) => !requestedDomain || domain.toLowerCase() === requestedDomain)
-        .map(({ domain, services: domainServices }) => ({ domain, services: domainServices })),
+        .map(({ domain, services: domainServices }) => ({
+          domain,
+          services: Object.fromEntries(
+            Object.entries(domainServices).filter(([service]) =>
+              isServiceDiscoverable(config, domain.toLowerCase(), service),
+            ),
+          ),
+        }))
+        .filter(({ services: domainServices }) => Object.keys(domainServices).length > 0)
+        .filter(({ domain }) => !requestedDomain || domain.toLowerCase() === requestedDomain),
     };
   });
 
@@ -101,7 +126,7 @@ export async function registerSystemRoutes(
     }
 
     const { domain, service } = parsedParams.data;
-    if (!config.allowedDomains.has(domain)) {
+    if (!isServiceDiscoverable(config, domain, service)) {
       return reply.code(403).send({ error: 'forbidden', message: 'Domain is not allowed.' });
     }
 
