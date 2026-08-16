@@ -229,7 +229,7 @@ All calls in a batch are validated before its first write. They then run sequent
 
 Every target entity must pass the configured policy. Before a write, group-like entities are resolved recursively into concrete entity IDs; if any resolved member is disallowed, cyclic, malformed, too numerous, or from another domain, the entire call is rejected before Home Assistant receives a service request. Domain-wide service calls, `device_id`, `area_id`, `label_id`, and target-less/global calls remain deliberately refused.
 
-The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Use the documented `entity_id` array and structured `data` object for GPT Actions. A single call can target several compatible allowed entities; when a request needs different services, use an ordered batch. Entity-valued fields advertised by a service contract (for example a TTS media-player field or media-player group members) are also checked against the domain/entity policy. Legacy REST clients may continue to use `target.entity_id` or `data_json`.
+The service name and its parameters are never hard-coded in the gateway. `/api/v1/services` discovers allowed services from Home Assistant, and `/api/v1/services/{domain}/{service}` returns the live contract for one selected service. Use the documented `entity_id` array and structured `data` object for GPT Actions. A single call can target several compatible allowed entities; when a request needs different services, use an ordered batch. Entity-valued fields advertised by a service contract (for example a TTS media-player field or media-player group members) are also checked against the domain/entity policy. For Home Assistant services that require response data, such as forecasts or calendar queries, the gateway automatically requests the required response. Legacy REST clients may continue to use `target.entity_id` or `data_json`.
 
 Services with no entity target published by Home Assistant remain unavailable. This deliberately excludes broad or global operations even if Home Assistant itself would accept them.
 
@@ -367,7 +367,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.4.3` makes parameterized and multi-device GPT Action calls practical: dynamic Home Assistant service parameters are now exposed as a structured `data` object, and ordered batches can apply the same approved parameters to multiple compatible explicit entities. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
+`v0.4.4` completes dynamic Home Assistant service handling by requesting response data automatically for services that require it, such as weather forecasts and calendar event queries. Parameterized and multi-device GPT Action calls continue to use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally and only for filtered area/device registry discovery.
 
 ## License
 

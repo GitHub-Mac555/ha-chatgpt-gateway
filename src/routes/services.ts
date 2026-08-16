@@ -24,6 +24,7 @@ type PreparedServiceCall = {
   service: string;
   entity_id: string | string[];
   data?: Record<string, unknown>;
+  returnResponse: boolean;
 };
 
 type ServiceInput = ServiceCallInput | ActionServiceCallInput;
@@ -178,6 +179,10 @@ async function prepareServiceCall(
           ? (resolvedTargets.entityIds[0] ?? resolvedTargets.entityIds)
           : resolvedTargets.entityIds,
       data,
+      // Home Assistant rejects response-only services without this flag. Do
+      // not request it for optional/non-response services: HA rejects that as
+      // well when a service does not support responses.
+      returnResponse: definition.response?.optional === false,
     },
   };
 }

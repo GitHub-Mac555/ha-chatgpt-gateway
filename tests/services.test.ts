@@ -66,6 +66,16 @@ function serviceCatalog() {
         },
       },
     },
+    {
+      domain: 'weather',
+      services: {
+        get_forecasts: {
+          target: { entity: [{ domain: ['weather'] }] },
+          fields: { type: { required: true } },
+          response: { optional: false },
+        },
+      },
+    },
   ];
 }
 
@@ -390,6 +400,36 @@ describe('service route', () => {
     expect(JSON.parse(String(init?.body))).toEqual({
       brightness_pct: 25,
       entity_id: ['light.living_room', 'light.kitchen'],
+    });
+    await app.close();
+  });
+
+  it('requests the required Home Assistant service response when the live contract requires it', async () => {
+    const fetchMock = mockServiceResponses([{ body: { service_response: { forecast: [] } } }]);
+    const config = makeConfig({ allowedDomains: new Set(['weather']) });
+    const app = await buildApp({ config, fetchImpl: fetchMock, logger: false });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/services/call',
+      headers: { authorization: `Bearer ${config.gatewayApiKey}` },
+      payload: {
+        domain: 'weather',
+        service: 'get_forecasts',
+        entity_id: ['weather.home'],
+        data: { type: 'daily' },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    const serviceCall = fetchMock.mock.calls.find(([url]) =>
+      String(url).includes('/api/services/weather/get_forecasts'),
+    );
+    expect(serviceCall?.[0]).toBe(
+      'http://homeassistant.local:8123/api/services/weather/get_forecasts?return_response',
+    );
+    expect(JSON.parse(String(serviceCall?.[1]?.body))).toEqual({
+      entity_id: ['weather.home'],
+      type: 'daily',
     });
     await app.close();
   });

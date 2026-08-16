@@ -201,7 +201,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           operationId: 'getHomeAssistantServiceContract',
           summary: 'Get the live input contract for one allowed Home Assistant service',
           description:
-            'Use before a parameterized command. The contract comes from Home Assistant and identifies supported fields, required fields, examples, and selectors for this service.',
+            'Use before a parameterized command. The contract comes from Home Assistant and identifies supported fields, required fields, examples, selectors, and whether the service returns data.',
           parameters: [
             {
               name: 'domain',
@@ -392,6 +392,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
             name: { type: 'string' },
             description: { type: 'string' },
             target: { type: 'object', additionalProperties: true },
+            response: { type: 'object', additionalProperties: true },
             fields: {
               type: 'array',
               items: {
