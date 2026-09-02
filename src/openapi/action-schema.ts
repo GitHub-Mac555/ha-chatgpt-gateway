@@ -50,6 +50,60 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           responses: { '200': { description: 'Connectivity diagnostics' }, ...errorResponses },
         },
       },
+      '/api/v1/logs/errors': {
+        get: {
+          operationId: 'getHomeAssistantErrorLog',
+          summary: 'Get bounded redacted Home Assistant error log lines',
+          description:
+            'Read recent Home Assistant error-log lines for troubleshooting. Output is bounded and common credential patterns are redacted.',
+          parameters: [
+            {
+              name: 'lines',
+              in: 'query',
+              schema: { type: 'integer', minimum: 1, maximum: 1000, default: 200 },
+            },
+          ],
+          responses: {
+            '200': { description: 'Recent redacted Home Assistant error log lines' },
+            ...errorResponses,
+          },
+        },
+      },
+      '/api/v1/logbook': {
+        get: {
+          operationId: 'getHomeAssistantLogbook',
+          summary: 'Get bounded Home Assistant logbook entries for allowed entities',
+          description:
+            'Read Home Assistant logbook events for troubleshooting. The range is limited to 7 days, results are capped, sensitive fields are redacted, and entries for entities blocked by gateway policy are removed.',
+          parameters: [
+            {
+              name: 'start_time',
+              in: 'query',
+              required: true,
+              schema: { type: 'string', format: 'date-time', examples: ['2026-09-01T00:00:00Z'] },
+            },
+            {
+              name: 'end_time',
+              in: 'query',
+              schema: { type: 'string', format: 'date-time', examples: ['2026-09-02T00:00:00Z'] },
+            },
+            {
+              name: 'entity_id',
+              in: 'query',
+              schema: { type: 'string', examples: ['sensor.office_temperature'] },
+            },
+            {
+              name: 'limit',
+              in: 'query',
+              schema: { type: 'integer', minimum: 1, maximum: 500, default: 200 },
+            },
+          ],
+          responses: {
+            '200': { description: 'Allowed redacted logbook entries' },
+            ...errorResponses,
+          },
+        },
+      },
       '/api/v1/entities': {
         get: {
           operationId: 'listHomeAssistantEntities',
