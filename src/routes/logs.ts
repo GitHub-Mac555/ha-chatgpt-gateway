@@ -21,6 +21,10 @@ const logbookQuerySchema = z.object({
   end_time: z.string().datetime({ offset: true }).optional(),
   entity_id: z.string().min(1).max(255).optional(),
   limit: z.coerce.number().int().min(1).max(MAX_LOGBOOK_ENTRIES).default(200),
+  include_state: z
+    .enum(['true', 'false'])
+    .default('false')
+    .transform((value) => value === 'true'),
 });
 
 function normalizeErrorLog(log: string, lines: number): { lines: string[]; truncated: boolean } {
@@ -102,15 +106,23 @@ export async function registerLogRoutes(
         return entityId !== undefined && isEntityAllowed(config, entityId);
       });
       const limitedEntries = allowedEntries.slice(0, queryResult.data.limit);
+      const minimizedEntries = queryResult.data.include_state
+        ? limitedEntries
+        : limitedEntries.map((entry) => {
+            if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
+            const { state: _state, ...rest } = entry as Record<string, unknown>;
+            return rest;
+          });
 
       return {
         start_time: startTime.toISOString(),
         end_time: endTime.toISOString(),
         entity_id: requestedEntityId ?? null,
+        include_state: queryResult.data.include_state,
         total_allowed_entries: allowedEntries.length,
         returned_entries: limitedEntries.length,
         truncated: limitedEntries.length < allowedEntries.length,
-        entries: redactSensitive(limitedEntries),
+        entries: redactSensitive(minimizedEntries),
       };
     });
   }
