@@ -30,4 +30,15 @@ describe('diagnostic OpenAPI feature flags', () => {
     expect(schema.paths).toHaveProperty('/api/v1/logs/errors');
     expect(schema.paths).toHaveProperty('/api/v1/logbook');
   });
+  it('documents state values as opt-in for logbook', () => {
+    const schema = buildOpenApiSchema('https://gateway.example.com', {
+      logbookEnabled: true,
+    });
+    const logbook = schema.paths['/api/v1/logbook'];
+    expect(logbook).toBeDefined();
+    const parameters = logbook && 'get' in logbook ? logbook.get.parameters : [];
+    const includeState = parameters?.find((parameter) => parameter.name === 'include_state');
+    expect(includeState?.schema).toMatchObject({ type: 'boolean', default: false });
+  });
+
 });
