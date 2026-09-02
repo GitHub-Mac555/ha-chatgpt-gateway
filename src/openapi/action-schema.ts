@@ -20,10 +20,7 @@ export interface OpenApiFeatureFlags {
   logbookEnabled?: boolean;
 }
 
-export function buildOpenApiSchema(
-  publicBaseUrl?: string,
-  features: OpenApiFeatureFlags = {},
-) {
+export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeatureFlags = {}) {
   return {
     openapi: '3.1.0',
     info: {
