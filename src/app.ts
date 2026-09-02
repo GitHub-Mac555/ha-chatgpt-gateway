@@ -64,7 +64,12 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   await registerHealthRoute(app, options.config);
 
-  app.get('/openapi.json', async () => buildOpenApiSchema(options.config.publicBaseUrl));
+  app.get('/openapi.json', async () =>
+    buildOpenApiSchema(options.config.publicBaseUrl, {
+      errorLogsEnabled: options.config.errorLogsEnabled,
+      logbookEnabled: options.config.logbookEnabled,
+    }),
+  );
 
   await app.register(async (protectedApp) => {
     protectedApp.addHook('onRequest', createRateLimitHook(options.config));
