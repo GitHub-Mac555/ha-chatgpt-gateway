@@ -88,7 +88,7 @@ export function buildOpenApiSchema(
                 operationId: 'getHomeAssistantLogbook',
                 summary: 'Get bounded Home Assistant logbook entries for allowed entities',
                 description:
-                  'Read Home Assistant logbook events for troubleshooting. This source is opt-in, authenticated, rate-limited, limited to 7 days and 500 entries, filtered by gateway entity policy, and redacted.',
+                  'Read Home Assistant logbook events for troubleshooting. This source is opt-in, authenticated, rate-limited, limited to 7 days and 500 entries, filtered by gateway entity policy, redacted, and omits state values by default.',
                 parameters: [
                   {
                     name: 'start_time',
@@ -118,6 +118,13 @@ export function buildOpenApiSchema(
                     name: 'limit',
                     in: 'query',
                     schema: { type: 'integer', minimum: 1, maximum: 500, default: 200 },
+                  },
+                  {
+                    name: 'include_state',
+                    in: 'query',
+                    description:
+                      'Include Home Assistant state values in logbook entries. Defaults to false to minimize disclosure of IP addresses, URLs, and other potentially sensitive state data.',
+                    schema: { type: 'boolean', default: false },
                   },
                 ],
                 responses: {
