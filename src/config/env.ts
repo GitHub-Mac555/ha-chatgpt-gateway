@@ -28,6 +28,8 @@ const envSchema = z
     ALLOWED_DOMAINS: z.string().min(1, 'ALLOWED_DOMAINS is required'),
     ALLOWED_ENTITIES: z.string().default(''),
     READ_ONLY: booleanFromString,
+    ENABLE_ERROR_LOGS: booleanFromString,
+    ENABLE_LOGBOOK: booleanFromString,
     LOG_LEVEL: logLevelSchema.default('info'),
     HOME_ASSISTANT_TIMEOUT_MS: z.coerce.number().int().min(100).max(120_000).default(10_000),
     HOME_ASSISTANT_SERVICE_TIMEOUT_MS: z.coerce
@@ -166,6 +168,8 @@ export interface GatewayConfig {
   allowedDomains: ReadonlySet<string>;
   allowedEntities: ReadonlySet<string>;
   readOnly: boolean;
+  errorLogsEnabled: boolean;
+  logbookEnabled: boolean;
   logLevel: z.infer<typeof logLevelSchema>;
   homeAssistantTimeoutMs: number;
   homeAssistantServiceTimeoutMs: number;
@@ -229,6 +233,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): GatewayConfig 
     allowedDomains,
     allowedEntities: parseCsv(parsed.ALLOWED_ENTITIES),
     readOnly: parsed.READ_ONLY,
+    errorLogsEnabled: parsed.ENABLE_ERROR_LOGS,
+    logbookEnabled: parsed.ENABLE_LOGBOOK,
     logLevel: parsed.LOG_LEVEL,
     homeAssistantTimeoutMs: parsed.HOME_ASSISTANT_TIMEOUT_MS,
     homeAssistantServiceTimeoutMs: parsed.HOME_ASSISTANT_SERVICE_TIMEOUT_MS,
