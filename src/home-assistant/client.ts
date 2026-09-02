@@ -136,9 +136,7 @@ export class HomeAssistantClient {
     if (entityId) {
       query.set('entity', entityId);
     }
-    return this.request(
-      `/api/logbook/${encodeURIComponent(startTime)}?${query.toString()}`,
-    );
+    return this.request(`/api/logbook/${encodeURIComponent(startTime)}?${query.toString()}`);
   }
 
   async callService(
