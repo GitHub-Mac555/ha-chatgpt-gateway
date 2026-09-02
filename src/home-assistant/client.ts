@@ -131,10 +131,6 @@ export class HomeAssistantClient {
     return this.request(`/api/config/automation/config/${encodeURIComponent(automationId)}`);
   }
 
-  async getErrorLog(): Promise<string> {
-    return this.request<string>('/api/error_log');
-  }
-
   async getLogbook(startTime: string, endTime: string, entityId?: string): Promise<unknown> {
     const query = new URLSearchParams({ end_time: endTime });
     if (entityId) {
