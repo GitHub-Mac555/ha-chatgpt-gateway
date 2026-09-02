@@ -73,8 +73,7 @@ describe('logbook routes', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url:
-        '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&limit=20',
+      url: '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&limit=20',
     });
 
     expect(response.statusCode).toBe(200);
@@ -108,8 +107,7 @@ describe('logbook routes', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url:
-        '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&include_state=true',
+      url: '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&include_state=true',
     });
 
     expect(response.statusCode).toBe(200);
@@ -129,8 +127,7 @@ describe('logbook routes', () => {
 
     const response = await app.inject({
       method: 'GET',
-      url:
-        '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&entity_id=sensor.blocked',
+      url: '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&entity_id=sensor.blocked',
     });
 
     expect(response.statusCode).toBe(403);
@@ -143,15 +140,13 @@ describe('logbook routes', () => {
 
     const longRange = await app.inject({
       method: 'GET',
-      url:
-        '/api/v1/logbook?start_time=2026-08-01T00:00:00Z&end_time=2026-09-02T00:00:00Z',
+      url: '/api/v1/logbook?start_time=2026-08-01T00:00:00Z&end_time=2026-09-02T00:00:00Z',
     });
     expect(longRange.statusCode).toBe(400);
 
     const excessiveLimit = await app.inject({
       method: 'GET',
-      url:
-        '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&limit=501',
+      url: '/api/v1/logbook?start_time=2026-09-02T18:00:00Z&end_time=2026-09-02T19:00:00Z&limit=501',
     });
     expect(excessiveLimit.statusCode).toBe(400);
 
