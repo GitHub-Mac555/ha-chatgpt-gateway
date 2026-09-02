@@ -66,7 +66,6 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   app.get('/openapi.json', async () =>
     buildOpenApiSchema(options.config.publicBaseUrl, {
-      errorLogsEnabled: options.config.errorLogsEnabled,
       logbookEnabled: options.config.logbookEnabled,
     }),
   );
