@@ -44,6 +44,7 @@ On mobile, tap an image to open it at full resolution.
 - Home Assistant state and service discovery
 - Live per-service contracts with fields, examples, and selectors from Home Assistant
 - Area and device discovery scoped to allowed entities
+- Optional bounded Home Assistant logbook access for troubleshooting
 - GPT Action-friendly generic service calls and controlled multi-step batches
 - Domain and entity allow-lists
 - Optional read-only mode
@@ -133,6 +134,7 @@ All runtime configuration is provided through environment variables.
 - `ALLOWED_DOMAINS` — required. Comma-separated Home Assistant domains exposed by the gateway.
 - `ALLOWED_ENTITIES` — default: empty only while `READ_ONLY=true`. Exact comma-separated entity allow-list. The gateway refuses to start with `READ_ONLY=false` and an empty value.
 - `READ_ONLY` — default: `false`. When `true`, blocks service calls while keeping read operations available.
+- `ENABLE_LOGBOOK` — default: `false`. Opt-in access to bounded Home Assistant logbook events. Returned entries are filtered by the existing domain/entity policy; state values are omitted by default.
 - `ENABLE_ADMIN_ACTIONS` — default: `false`. Enables the separate, exact allow-list of target-less maintenance actions.
 - `ADMIN_ALLOWED_ACTIONS` — required when administration actions are enabled. Supported values are `homeassistant.check_config`, `homeassistant.reload_all`, `homeassistant.reload_core_config`, `homeassistant.reload_custom_templates`, `homeassistant.restart`, `automation.reload`, `scene.reload`, and `script.reload`.
 
@@ -157,6 +159,7 @@ GET  /openapi.json
 
 GET  /api/v1/config
 GET  /api/v1/diagnostics
+GET  /api/v1/logbook              # only when ENABLE_LOGBOOK=true
 GET  /api/v1/services
 GET  /api/v1/services/{domain}/{service}
 GET  /api/v1/areas
@@ -263,6 +266,35 @@ The gateway exposes bounded, read-only analysis endpoints without becoming a gen
 - `GET /api/v1/automations/{entityId}` returns the configuration of one allowed `automation.*` entity. It redacts values whose keys indicate tokens, passwords, API keys, Authorization data, secrets, or webhooks.
 
 To analyse an appliance's consumption, add its specific energy and power sensor IDs to `ALLOWED_ENTITIES` and permit the `sensor` domain. To inspect its schedule, add only the related `automation.*` IDs and permit `automation`. These endpoints are read-only; enabling a domain does not bypass the entity allow-list for service calls.
+
+## Logbook troubleshooting
+
+Logbook access is intentionally disabled by default. Enable it explicitly:
+
+```env
+ENABLE_LOGBOOK=true
+```
+
+Then use `GET /api/v1/logbook` with a required ISO-8601 `start_time` and optional `end_time`, `entity_id`, `limit`, and `include_state` parameters.
+
+Security properties:
+
+- requests require a normal gateway credential and use the existing protected-route rate limit;
+- the requested interval must be positive and no longer than 7 days;
+- responses are capped at 500 allowed entries;
+- an explicitly requested `entity_id` must pass the existing gateway entity policy;
+- unscoped responses keep only entries whose `entity_id` passes the existing domain/entity policy;
+- sensitive object fields and common credential patterns are redacted;
+- `include_state=false` is the default so state values such as internal IP addresses or URLs are not disclosed unless explicitly requested.
+
+Example:
+
+```http
+GET /api/v1/logbook?start_time=2026-09-02T18:00:00Z&limit=100
+Authorization: Bearer <GATEWAY_READ_API_KEY-or-GATEWAY_WRITE_API_KEY>
+```
+
+Set `include_state=true` only when state values are required for the specific diagnosis. For normal entity state inspection, prefer the existing entity endpoints.
 
 ## Read-only mode
 
@@ -389,7 +421,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and an exact allow-list for selected Home Assistant maintenance actions. Parameterized and multi-device calls continue to use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally only for filtered area/device registry discovery.
+`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and an exact allow-list for selected Home Assistant maintenance actions. This branch additionally proposes opt-in, policy-filtered logbook access for troubleshooting. Parameterized and multi-device calls continue to use the structured `data` object and ordered batches. The public interface remains HTTPS/REST only; Home Assistant’s WebSocket API is used internally only for filtered area/device registry discovery.
 
 ## License
 
