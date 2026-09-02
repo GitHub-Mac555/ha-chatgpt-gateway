@@ -4,18 +4,10 @@ import type { GatewayConfig } from '../config/env.js';
 import type { HomeAssistantClient } from '../home-assistant/client.js';
 import { invalidRequest } from '../http/errors.js';
 import { isEntityAllowed } from '../security/authorization.js';
-import { redactSensitive, redactSensitiveText } from '../security/redaction.js';
+import { redactSensitive } from '../security/redaction.js';
 
 const MAX_LOGBOOK_DAYS = 7;
 const MAX_LOGBOOK_ENTRIES = 500;
-const DEFAULT_ERROR_LOG_LINES = 200;
-const MAX_ERROR_LOG_LINES = 1000;
-const MAX_ERROR_LOG_LINE_LENGTH = 4000;
-
-const errorLogQuerySchema = z.object({
-  lines: z.coerce.number().int().min(1).max(MAX_ERROR_LOG_LINES).default(DEFAULT_ERROR_LOG_LINES),
-});
-
 const logbookQuerySchema = z.object({
   start_time: z.string().datetime({ offset: true }),
   end_time: z.string().datetime({ offset: true }).optional(),
@@ -26,21 +18,6 @@ const logbookQuerySchema = z.object({
     .default('false')
     .transform((value) => value === 'true'),
 });
-
-function normalizeErrorLog(log: string, lines: number): { lines: string[]; truncated: boolean } {
-  const allLines = log.split(/\r?\n/);
-  const selected = allLines.slice(-lines);
-  return {
-    lines: selected.map((line) =>
-      redactSensitiveText(
-        line.length > MAX_ERROR_LOG_LINE_LENGTH
-          ? `${line.slice(0, MAX_ERROR_LOG_LINE_LENGTH)}…[TRUNCATED]`
-          : line,
-      ),
-    ),
-    truncated: selected.length < allLines.length,
-  };
-}
 
 function getLogbookEntityId(entry: unknown): string | undefined {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return undefined;
@@ -53,24 +30,6 @@ export async function registerLogRoutes(
   config: GatewayConfig,
   client: HomeAssistantClient,
 ): Promise<void> {
-  if (config.errorLogsEnabled) {
-    app.get('/api/v1/logs/errors', async (request, reply) => {
-      const queryResult = errorLogQuerySchema.safeParse(request.query);
-      if (!queryResult.success) {
-        return reply.code(400).send(invalidRequest(queryResult.error.issues));
-      }
-
-      const normalized = normalizeErrorLog(await client.getErrorLog(), queryResult.data.lines);
-      return {
-        source: 'home_assistant_error_log',
-        requested_lines: queryResult.data.lines,
-        returned_lines: normalized.lines.length,
-        truncated: normalized.truncated,
-        lines: normalized.lines,
-      };
-    });
-  }
-
   if (config.logbookEnabled) {
     app.get('/api/v1/logbook', async (request, reply) => {
       const queryResult = logbookQuerySchema.safeParse(request.query);
