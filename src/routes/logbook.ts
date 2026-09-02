@@ -69,7 +69,8 @@ export async function registerLogbookRoutes(
         ? limitedEntries
         : limitedEntries.map((entry) => {
             if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return entry;
-            const { state: _state, ...rest } = entry as Record<string, unknown>;
+            const rest = { ...(entry as Record<string, unknown>) };
+            delete rest.state;
             return rest;
           });
 
