@@ -21,8 +21,7 @@ describe('redaction', () => {
   });
 
   it('redacts common credentials embedded in text', () => {
-    const input =
-      'Authorization: Bearer abc.def.ghi password=hunter2 "api_key":"super-secret"';
+    const input = 'Authorization: Bearer abc.def.ghi password=hunter2 "api_key":"super-secret"';
     const output = redactSensitiveText(input);
 
     expect(output).not.toContain('abc.def.ghi');
