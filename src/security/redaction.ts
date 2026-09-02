@@ -1,5 +1,4 @@
-const SENSITIVE_KEY_PATTERN =
-  /token|secret|password|authorization|api[_-]?key|webhook/i;
+const SENSITIVE_KEY_PATTERN = /token|secret|password|authorization|api[_-]?key|webhook/i;
 
 const SENSITIVE_TEXT_PATTERNS = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,
