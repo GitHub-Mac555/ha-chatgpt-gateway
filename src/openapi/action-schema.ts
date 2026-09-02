@@ -17,7 +17,6 @@ const entityIdParameter = {
 };
 
 export interface OpenApiFeatureFlags {
-  errorLogsEnabled?: boolean;
   logbookEnabled?: boolean;
 }
 
@@ -58,29 +57,6 @@ export function buildOpenApiSchema(
           responses: { '200': { description: 'Connectivity diagnostics' }, ...errorResponses },
         },
       },
-      ...(features.errorLogsEnabled
-        ? {
-            '/api/v1/logs/errors': {
-              get: {
-                operationId: 'getHomeAssistantErrorLog',
-                summary: 'Get bounded redacted Home Assistant error log lines',
-                description:
-                  'Read recent Home Assistant error-log lines for troubleshooting. This sensitive global diagnostic source is opt-in, bounded, authenticated, rate-limited, and redacted.',
-                parameters: [
-                  {
-                    name: 'lines',
-                    in: 'query',
-                    schema: { type: 'integer', minimum: 1, maximum: 1000, default: 200 },
-                  },
-                ],
-                responses: {
-                  '200': { description: 'Recent redacted Home Assistant error log lines' },
-                  ...errorResponses,
-                },
-              },
-            },
-          }
-        : {}),
       ...(features.logbookEnabled
         ? {
             '/api/v1/logbook': {
