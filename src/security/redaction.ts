@@ -3,7 +3,7 @@ const SENSITIVE_KEY_PATTERN =
 
 const SENSITIVE_TEXT_PATTERNS = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,
-  /\b(authorization|access[_-]?token|refresh[_-]?token|api[_-]?key|password|secret)\b\s*[:=]\s*[^\s,;]+/gi,
+  /["']?(authorization|access[_-]?token|refresh[_-]?token|api[_-]?key|password|secret)["']?\s*[:=]\s*["']?[^"'\s,;}]+["']?/gi,
   /\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g,
 ];
 
