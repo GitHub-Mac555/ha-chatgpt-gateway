@@ -62,7 +62,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                 operationId: 'getHomeAssistantLogbook',
                 summary: 'Get bounded Home Assistant logbook entries for allowed entities',
                 description:
-                  'Read Home Assistant logbook events for troubleshooting. This source is opt-in, authenticated, rate-limited, limited to 24 hours when unscoped and up to 7 days when scoped to an allowed entity_id, capped at 500 returned entries, filtered by gateway entity policy, redacted as defense-in-depth, and omits state values by default.',
+                  'Read Home Assistant logbook events for troubleshooting. This opt-in endpoint is authenticated and rate-limited, filters by gateway entity policy, returns at most 500 entries, allows 24 hours unscoped or 7 days for an allowed entity_id, redacts data, and omits state values by default.',
                 parameters: [
                   {
                     name: 'start_time',
@@ -116,7 +116,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                 operationId: 'getHomeAssistantErrorLogs',
                 summary: 'Get bounded Home Assistant Core warning and error log lines',
                 description:
-                  'Reads only the fixed Home Assistant Core log source through the optional diagnostics companion. The request is authenticated and rate-limited, accepts 1 to 500 recent source lines, returns only warning/error-severity lines, and applies best-effort secret redaction. Regex redaction cannot guarantee removal of every secret.',
+                  'Read only Home Assistant Core logs through the optional diagnostics companion. This endpoint is authenticated and rate-limited, accepts 1 to 500 recent source lines, returns only warning and error entries, and applies best-effort secret redaction that cannot guarantee removal of every secret.',
                 parameters: [
                   {
                     name: 'lines',
