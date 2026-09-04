@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9
+
+- Point banner assets to the original upstream project for publication.
+- Validate both supported container architectures in CI.
+
 ## 0.1.8
 
 - Point the Home Assistant app-store installation instructions to the original

@@ -443,7 +443,7 @@ See [docs/security.md](docs/security.md).
 
 ## Project status
 
-`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts, selected Home Assistant maintenance actions, and policy-filtered logbook access. The optional diagnostics companion in this branch adds bounded Home Assistant Core warning/error logs without giving the normal gateway Supervisor access.
+`v0.5.0` adds opt-in asynchronous dispatch for long-running automations/scripts and selected Home Assistant maintenance actions. The current main branch also includes opt-in, policy-filtered logbook access. The optional diagnostics companion proposed here adds bounded Home Assistant Core warning/error logs without giving the normal gateway Supervisor access.
 
 ## License
 
