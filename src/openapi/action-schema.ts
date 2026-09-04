@@ -61,7 +61,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                 operationId: 'getHomeAssistantLogbook',
                 summary: 'Get bounded Home Assistant logbook entries for allowed entities',
                 description:
-                  'Read Home Assistant logbook events for troubleshooting. This source is opt-in, authenticated, rate-limited, limited to 7 days and 500 entries, filtered by gateway entity policy, redacted, and omits state values by default.',
+                  'Read Home Assistant logbook events for troubleshooting. This source is opt-in, authenticated, rate-limited, limited to 24 hours when unscoped and up to 7 days when scoped to an allowed entity_id, capped at 500 returned entries, filtered by gateway entity policy, redacted as defense-in-depth, and omits state values by default.',
                 parameters: [
                   {
                     name: 'start_time',
