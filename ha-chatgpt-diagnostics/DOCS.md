@@ -51,16 +51,17 @@ Supervisor role currently exists.
 > compromise of its process or Supervisor token would have a larger impact than
 > its public HTTP API suggests.
 
-## Installation from the test fork
+## Installation from the original project
 
-Do not treat this unpublished branch as an upstream release.
+The app becomes available from this repository after it has been published by
+the original project.
 
 1. In Home Assistant, open **Settings → Apps → App store**.
 2. Open **⋮ → Repositories**.
 3. Add:
 
    ```text
-   https://github.com/GitHub-Mac555/ha-chatgpt-gateway
+   https://github.com/aferende/ha-chatgpt-gateway
    ```
 
 4. Find **HA ChatGPT Diagnostics** and install it.

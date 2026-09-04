@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.8
+
+- Point the Home Assistant app-store installation instructions to the original
+  upstream project instead of the temporary test fork.
+
 ## 0.1.7
 
 - Add a dedicated wide banner for the Info and Documentation pages with the
