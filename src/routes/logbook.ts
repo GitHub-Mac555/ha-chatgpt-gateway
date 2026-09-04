@@ -86,6 +86,7 @@ export async function registerLogbookRoutes(
         total_allowed_entries: allowedEntries.length,
         returned_entries: limitedEntries.length,
         truncated: limitedEntries.length < allowedEntries.length,
+        // Redaction is defense in depth; authorization, filtering, range bounds, and state minimization are primary.
         entries: redactSensitive(minimizedEntries),
       };
     });
