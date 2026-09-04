@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Adds an optional Home Assistant diagnostics companion and an opt-in gateway route for bounded, redacted Home Assistant Core warning/error lines.
+
+### Security
+
+- Keeps Supervisor credentials out of the Internet-facing gateway and exposes no generic Supervisor, filesystem, shell, or log-source proxy.
+
 ## v0.5.0 — Long-running automations and opt-in administration
 
 ### Added

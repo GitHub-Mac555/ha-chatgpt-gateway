@@ -18,6 +18,7 @@ const entityIdParameter = {
 
 export interface OpenApiFeatureFlags {
   logbookEnabled?: boolean;
+  errorLogsEnabled?: boolean;
 }
 
 export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeatureFlags = {}) {
@@ -103,6 +104,58 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                 responses: {
                   '200': { description: 'Allowed redacted logbook entries' },
                   ...errorResponses,
+                },
+              },
+            },
+          }
+        : {}),
+      ...(features.errorLogsEnabled
+        ? {
+            '/api/v1/logs/errors': {
+              get: {
+                operationId: 'getHomeAssistantErrorLogs',
+                summary: 'Get bounded Home Assistant Core warning and error log lines',
+                description:
+                  'Reads only the fixed Home Assistant Core log source through the optional diagnostics companion. The request is authenticated and rate-limited, accepts 1 to 500 recent source lines, returns only warning/error-severity lines, and applies best-effort secret redaction. Regex redaction cannot guarantee removal of every secret.',
+                parameters: [
+                  {
+                    name: 'lines',
+                    in: 'query',
+                    schema: { type: 'integer', minimum: 1, maximum: 500, default: 100 },
+                  },
+                ],
+                responses: {
+                  ...errorResponses,
+                  '200': {
+                    description: 'Redacted Home Assistant Core warning and error lines',
+                    content: {
+                      'application/json': {
+                        schema: {
+                          type: 'object',
+                          properties: {
+                            source: { type: 'string', const: 'home_assistant_core' },
+                            requested_lines: { type: 'integer', minimum: 1, maximum: 500 },
+                            returned_lines: { type: 'integer', minimum: 0, maximum: 500 },
+                            truncated: { type: 'boolean' },
+                            entries: {
+                              type: 'array',
+                              maxItems: 500,
+                              items: { type: 'string', maxLength: 24576 },
+                            },
+                          },
+                          required: [
+                            'source',
+                            'requested_lines',
+                            'returned_lines',
+                            'truncated',
+                            'entries',
+                          ],
+                        },
+                      },
+                    },
+                  },
+                  '502': { description: 'Diagnostics companion returned an unexpected response' },
+                  '503': { description: 'Diagnostics companion is unavailable or timed out' },
                 },
               },
             },
