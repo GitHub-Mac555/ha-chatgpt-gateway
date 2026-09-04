@@ -15,6 +15,7 @@ const MAX_REQUESTS = 30;
 const RATE_WINDOW_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
 const ERROR_LINE_PATTERN = /\b(?:warning|warn|error|err|critical|fatal)\b/i;
+const APP_VERSION = process.env.APP_VERSION ?? 'development';
 
 const SENSITIVE_TEXT_PATTERNS = [
   /\bBearer\s+[A-Za-z0-9._~+/=-]+/gi,
@@ -24,6 +25,17 @@ const SENSITIVE_TEXT_PATTERNS = [
   /(\/api\/webhook\/)[A-Za-z0-9._~-]+/gi,
   /([?&](?:access[_-]?token|api[_-]?key|password|secret|token)=)[^&#\s]+/gi,
 ];
+
+export function formatLogEvent(level, event, fields = {}, timestamp = new Date()) {
+  return JSON.stringify({ timestamp: timestamp.toISOString(), level, event, ...fields });
+}
+
+function logEvent(level, event, fields = {}) {
+  const line = formatLogEvent(level, event, fields);
+  if (level === 'error') console.error(line);
+  else if (level === 'warning') console.warn(line);
+  else console.log(line);
+}
 
 export function redactSensitiveText(value) {
   return value
@@ -106,7 +118,12 @@ export async function fetchCoreErrorLogs({ lines, supervisorToken, fetchImpl = f
   };
 }
 
-export function createDiagnosticsServer({ diagnosticsToken, supervisorToken, fetchImpl = fetch }) {
+export function createDiagnosticsServer({
+  diagnosticsToken,
+  supervisorToken,
+  fetchImpl = fetch,
+  logger = logEvent,
+}) {
   if (!/^[a-f0-9]{64}$/i.test(diagnosticsToken)) {
     throw new Error('A 64-character hexadecimal diagnostics token is required');
   }
@@ -139,6 +156,7 @@ export function createDiagnosticsServer({ diagnosticsToken, supervisorToken, fet
       'ratelimit-reset': String(Math.ceil(rate.resetAt / 1000)),
     };
     if (rate.count > MAX_REQUESTS) {
+      logger('warning', 'request_rate_limited');
       return sendJson(
         response,
         429,
@@ -153,6 +171,7 @@ export function createDiagnosticsServer({ diagnosticsToken, supervisorToken, fet
       ? authorization.slice(prefix.length)
       : '';
     if (!secureTokenMatches(suppliedToken, diagnosticsToken)) {
+      logger('warning', 'authentication_failed');
       return sendJson(
         response,
         401,
@@ -190,13 +209,14 @@ export function createDiagnosticsServer({ diagnosticsToken, supervisorToken, fet
     }
 
     try {
-      return sendJson(
-        response,
-        200,
-        await fetchCoreErrorLogs({ lines, supervisorToken, fetchImpl }),
-        rateHeaders,
-      );
+      const result = await fetchCoreErrorLogs({ lines, supervisorToken, fetchImpl });
+      logger('info', 'core_logs_returned', {
+        requested_lines: lines,
+        returned_lines: result.returned_lines,
+      });
+      return sendJson(response, 200, result, rateHeaders);
     } catch {
+      logger('error', 'supervisor_request_failed');
       return sendJson(
         response,
         503,
@@ -211,16 +231,40 @@ export function createDiagnosticsServer({ diagnosticsToken, supervisorToken, fet
 }
 
 async function main() {
+  logEvent('info', 'startup_begin', { version: APP_VERSION });
   const options = JSON.parse(await readFile('/data/options.json', 'utf8'));
+  logEvent('info', 'configuration_loaded');
   if (typeof process.getuid === 'function' && process.getuid() === 0) {
     process.setgid('node');
     process.setuid('node');
+    logEvent('info', 'privileges_dropped', {
+      uid: process.getuid(),
+      gid: process.getgid(),
+    });
   }
   const server = createDiagnosticsServer({
     diagnosticsToken: options.diagnostics_token,
     supervisorToken: process.env.SUPERVISOR_TOKEN,
   });
-  server.listen(8099, '0.0.0.0');
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(8099, '0.0.0.0', resolve);
+  });
+  logEvent('info', 'listening', { host: '0.0.0.0', port: 8099 });
+
+  for (const signal of ['SIGTERM', 'SIGINT']) {
+    process.once(signal, () => {
+      logEvent('info', 'shutdown_requested', { signal });
+      server.close((error) => {
+        if (error) {
+          logEvent('error', 'shutdown_failed');
+          process.exit(1);
+        }
+        logEvent('info', 'shutdown_complete');
+        process.exit(0);
+      });
+    });
+  }
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -228,12 +272,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     let category = 'startup_failed';
     if (error?.code === 'EACCES') category = 'configuration_unreadable';
     else if (error instanceof SyntaxError) category = 'configuration_invalid_json';
-    else if (error?.message === 'Invalid diagnostics token configuration') {
+    else if (error?.message === 'A 64-character hexadecimal diagnostics token is required') {
       category = 'configuration_invalid_token';
     } else if (error?.message === 'Supervisor API access is unavailable') {
       category = 'supervisor_token_unavailable';
     }
-    console.error(`Diagnostics companion failed to start (${category}).`);
+    logEvent('error', 'startup_failed', { category });
     process.exit(1);
   });
 }
