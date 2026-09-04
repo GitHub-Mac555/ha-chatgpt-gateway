@@ -76,20 +76,16 @@ describe('diagnostics companion', () => {
     });
   });
 
-  it('formats structured log events with an ISO timestamp and no implicit secrets', () => {
+  it('formats readable log events with a German date and no implicit secrets', () => {
     const line = formatLogEvent(
       'info',
       'listening',
       { port: 8099 },
       new Date('2026-09-04T19:00:00.000Z'),
     );
-    expect(JSON.parse(line)).toEqual({
-      timestamp: '2026-09-04T19:00:00.000Z',
-      level: 'info',
-      event: 'listening',
-      port: 8099,
-    });
+    expect(line).toBe('04.09.2026 21.00.00 INFO API bereit auf Port 8099');
     expect(line).not.toContain(DIAGNOSTICS_TOKEN);
+    expect(line).not.toMatch(/[{}[\]",:]/);
   });
 
   it.each(['0', '501', '1;cat /etc/passwd', '../secrets'])(

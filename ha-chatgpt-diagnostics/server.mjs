@@ -27,7 +27,36 @@ const SENSITIVE_TEXT_PATTERNS = [
 ];
 
 export function formatLogEvent(level, event, fields = {}, timestamp = new Date()) {
-  return JSON.stringify({ timestamp: timestamp.toISOString(), level, event, ...fields });
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('de-DE', {
+      timeZone: 'Europe/Berlin',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hourCycle: 'h23',
+    })
+      .formatToParts(timestamp)
+      .map(({ type, value }) => [type, value]),
+  );
+  const dateAndTime = `${parts.day}.${parts.month}.${parts.year} ${parts.hour}.${parts.minute}.${parts.second}`;
+  const messages = {
+    startup_begin: `Neuer App-Start  HA ChatGPT Diagnostics Version ${fields.version}`,
+    configuration_loaded: 'Konfiguration erfolgreich geladen',
+    privileges_dropped: `Rechte abgegeben  UID ${fields.uid}  GID ${fields.gid}`,
+    listening: `API bereit auf Port ${fields.port}`,
+    core_logs_returned: `Core-Logs abgerufen  angefordert ${fields.requested_lines}  zurückgegeben ${fields.returned_lines}`,
+    authentication_failed: 'Zugriff mit fehlendem oder ungültigem Token abgewiesen',
+    request_rate_limited: 'Anfrage wegen Rate-Limit abgewiesen',
+    supervisor_request_failed: 'Supervisor-Anfrage fehlgeschlagen',
+    shutdown_requested: `Beenden angefordert  Signal ${fields.signal}`,
+    shutdown_complete: 'App sauber beendet',
+    shutdown_failed: 'Fehler beim Beenden der App',
+    startup_failed: `Start fehlgeschlagen  Kategorie ${fields.category}`,
+  };
+  return `${dateAndTime} ${level.toUpperCase()} ${messages[event] ?? event}`;
 }
 
 function logEvent(level, event, fields = {}) {
