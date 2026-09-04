@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="logo.png" alt="HA ChatGPT Diagnostics" width="625">
-</p>
+![HA ChatGPT Diagnostics](https://raw.githubusercontent.com/GitHub-Mac555/ha-chatgpt-gateway/refs/heads/feature/diagnostics-companion/ha-chatgpt-diagnostics/logo.png)
 
 # HA ChatGPT Diagnostics
 
