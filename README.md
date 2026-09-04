@@ -280,11 +280,12 @@ Then use `GET /api/v1/logbook` with a required ISO-8601 `start_time` and optiona
 Security properties:
 
 - requests require a normal gateway credential and use the existing protected-route rate limit;
-- the requested interval must be positive and no longer than 7 days;
+- unscoped requests without `entity_id` must use a positive interval of no more than 24 hours;
+- requests scoped to an allowed `entity_id` may use a positive interval of up to 7 days;
 - responses are capped at 500 allowed entries;
 - an explicitly requested `entity_id` must pass the existing gateway entity policy;
 - unscoped responses keep only entries whose `entity_id` passes the existing domain/entity policy;
-- sensitive object fields and common credential patterns are redacted;
+- sensitive object fields and common credential patterns are redacted as defense-in-depth only, not as the primary disclosure boundary;
 - `include_state=false` is the default so state values such as internal IP addresses or URLs are not disclosed unless explicitly requested.
 
 Example:
