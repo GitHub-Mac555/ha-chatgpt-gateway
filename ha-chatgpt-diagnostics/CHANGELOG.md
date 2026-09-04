@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6
+
+- Redesign the Documentation page with visual branding, concise tables,
+  step-by-step setup, expected results, and troubleshooting guidance.
+
 ## 0.1.5
 
 - Load the wide Info-page logo from an absolute repository URL so Home

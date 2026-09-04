@@ -1,89 +1,229 @@
+![HA ChatGPT Diagnostics](https://raw.githubusercontent.com/GitHub-Mac555/ha-chatgpt-gateway/refs/heads/feature/diagnostics-companion/ha-chatgpt-diagnostics/logo.png)
+
 # HA ChatGPT Diagnostics
 
-This optional Home Assistant app provides a single, read-only diagnostic operation for HA ChatGPT Gateway. The normal gateway continues to work when this app is absent.
+HA ChatGPT Diagnostics gives HA ChatGPT Gateway a deliberately small,
+authenticated view of recent **Home Assistant Core warnings and errors**. The
+normal gateway continues to work when this optional app is absent.
+
+> **Privacy first:** The app does not provide a shell, arbitrary log access, a
+> generic Supervisor proxy, or access to Home Assistant configuration files.
+
+## At a glance
+
+| Property            | Behavior                                               |
+| ------------------- | ------------------------------------------------------ |
+| Log source          | Home Assistant Core only                               |
+| Included severities | Warning, error, critical, and fatal                    |
+| Request range       | 1–500 recent source lines                              |
+| Authentication      | Dedicated 64-character hexadecimal bearer token        |
+| Network exposure    | Disabled until port 8099 is mapped manually            |
+| Public access       | Never expose the app itself through Funnel or a router |
+| Gateway feature     | Optional and disabled by default                       |
 
 ## Architecture
 
 ```text
-ChatGPT -> HTTPS -> HA ChatGPT Gateway -> LAN HTTP + bearer token
-        -> diagnostics app -> Supervisor GET /core/logs
+ChatGPT
+   │ HTTPS
+   ▼
+HA ChatGPT Gateway
+   │ trusted LAN + dedicated bearer token
+   ▼
+HA ChatGPT Diagnostics
+   │ fixed Supervisor request  GET /core/logs
+   ▼
+Home Assistant Core logs
 ```
 
-The app reads only recent Home Assistant Core container logs from the Supervisor systemd-journal backend. It does not expose host, Supervisor, or arbitrary app logs. It has no generic proxy, shell, Docker socket, host network access, ingress, or filesystem mounts.
+The public gateway never receives Supervisor credentials. Only the companion
+app can reach the fixed Supervisor log endpoint.
 
-The only routes are:
+## Before installing
 
-- `GET /health` (liveness only, no authentication);
-- `GET /api/v1/logs/errors?lines=100` (bearer authentication required).
+The app requires `hassio_api: true` and `hassio_role: homeassistant`. Home
+Assistant's `default` role cannot read `/core/logs`, and no narrower log-only
+Supervisor role currently exists.
 
-`lines` defaults to 100 and must be an integer from 1 through 500. Unknown parameters, duplicate limits, paths, source selectors, and expressions are rejected. The app asks Supervisor for that many recent Core source lines, keeps only lines marked warning, error, critical, or fatal, caps upstream and downstream response sizes, and never follows logs.
+> **Residual permission risk:** The `homeassistant` role also technically
+> authorizes other `/core/*` Supervisor operations, including state-changing
+> lifecycle operations. This app never calls or proxies those operations, but
+> compromise of its process or Supervisor token would have a larger impact than
+> its public HTTP API suggests.
 
-## Required permission
+## Installation from the test fork
 
-The app declares only `hassio_api: true` and `hassio_role: homeassistant`. Home Assistant's `default` role cannot read `/core/logs`. No narrower, log-only Supervisor role currently exists.
+Do not treat this unpublished branch as an upstream release.
 
-The `homeassistant` role also technically authorizes other `/core/*` Supervisor operations, including state-changing lifecycle operations. This app never calls or proxies those operations, but compromise of its process or Supervisor token would have a larger impact than its public HTTP API suggests. This coarse upstream role is the principal residual privilege risk and the reason Supervisor access is isolated from the Internet-facing gateway.
+1. In Home Assistant, open **Settings → Apps → App store**.
+2. Open **⋮ → Repositories**.
+3. Add:
 
-## Threat model and limits
+   ```text
+   https://github.com/GitHub-Mac555/ha-chatgpt-gateway
+   ```
 
-- The gateway-to-app bearer token must be a distinct 64-character hexadecimal secret. It is read from Home Assistant app options, compared using SHA-256 digests plus a timing-safe comparison, and is never returned or intentionally logged.
-- The protected route is limited to 30 requests per source address per 60 seconds. The gateway's normal protected-route rate limit also applies.
-- The source, Supervisor host, method, and path are constants. Caller-controlled URLs, paths, filenames, grep expressions, and shell input do not exist.
-- Responses contain only severity-matching lines and use `Cache-Control: no-store`. Both components apply redaction for common authorization values, bearer tokens, API/access tokens, passwords, JWTs, webhook secrets, credential-bearing URLs, and sensitive query parameters.
-- Regex redaction is defense in depth and cannot guarantee that every secret in arbitrary log text is removed. Authentication, a fixed source, small windows, severity filtering, response caps, and network isolation are the primary disclosure controls.
-- The app uses plain HTTP on the trusted LAN because Home Assistant app port mappings do not provide app-managed TLS. Anyone able to sniff that network path could observe the bearer token and returned logs. Use a trusted isolated LAN/VLAN or a private overlay if that is not acceptable.
-- Do not expose port 8099 to the Internet, Home Assistant ingress, a router port-forward, or the gateway's Tailscale Funnel.
+4. Find **HA ChatGPT Diagnostics** and install it.
+5. Keep protection mode enabled.
 
-## Install for a local/fork-based test
+Alternatively, experienced app developers can copy only the
+`ha-chatgpt-diagnostics` directory to `/addons/ha-chatgpt-diagnostics` and
+reload the app store.
 
-Do not install this unpublished branch as an upstream release. Use one of these test paths:
+## Configuration
 
-1. Fork the repository, place this branch on the fork's default branch, then add `https://github.com/<your-account>/ha-chatgpt-gateway` as a custom repository in **Settings > Apps > App store > Repositories**; or
-2. Copy only the `ha-chatgpt-diagnostics` directory to `/addons/ha-chatgpt-diagnostics` on the Home Assistant host through an already trusted local app-development method, then reload the app store.
+### 1. Create a dedicated token
 
-Next:
+Generate a new token on a trusted machine:
 
-1. Open **HA ChatGPT Diagnostics** and install it. Keep protection mode enabled.
-2. Generate a new token on a trusted machine with `openssl rand -hex 32`. Do not reuse a Home Assistant token or gateway key.
-3. Paste that value into the app's `diagnostics_token` option and save.
-4. Under the app's **Network** settings, map container port `8099/tcp` to host port `8099`. The mapping is disabled by default so installation alone does not expose a listener.
-5. Start the app. Confirm its log contains only a normal start message; the implementation never prints configured tokens.
-6. Ensure the Home Assistant host firewall/router permits port 8099 only from the Raspberry Pi gateway address. Home Assistant's app mapping itself cannot bind the published port to a chosen LAN address.
+```bash
+openssl rand -hex 32
+```
 
-## Test from the Raspberry Pi gateway
+Do not reuse a Home Assistant token or the gateway API key. Paste the result
+into `diagnostics_token`, save it, and never post it in screenshots, chats,
+issues, or logs.
 
-First test the companion directly over the trusted LAN:
+| Option              | Required | Description                                                                |
+| ------------------- | -------- | -------------------------------------------------------------------------- |
+| `diagnostics_token` | Yes      | Exactly 64 hexadecimal characters; used only between gateway and companion |
+
+### 2. Map the network port
+
+Under **Network**, enter host port `8099` in the empty field next to
+`8099/tcp`, then save.
+
+The mapping is disabled by default. Permit port 8099 only from the trusted
+Raspberry Pi gateway. Do not expose it through a router port-forward, Home
+Assistant ingress, or Tailscale Funnel.
+
+The connection uses plain HTTP on the trusted LAN because Home Assistant app
+port mappings do not provide app-managed TLS. Anyone able to sniff that path
+could observe the bearer token and returned logs. Use an isolated LAN/VLAN or
+private overlay if this is unacceptable.
+
+### 3. Start the app
+
+Start the app and open **Protocol**. A successful start looks like this:
+
+```text
+04.09.2026 21.58.14 INFO Neuer App-Start  HA ChatGPT Diagnostics Version 0.1.3
+04.09.2026 21.58.14 INFO Konfiguration erfolgreich geladen
+04.09.2026 21.58.14 INFO Rechte abgegeben  UID 1000  GID 1000
+04.09.2026 21.58.15 INFO API bereit auf Port 8099
+```
+
+Tokens, authorization headers, and returned Home Assistant log content are
+never written to this protocol.
+
+## API reference
+
+| Route                               | Authentication | Result                      |
+| ----------------------------------- | -------------- | --------------------------- |
+| `GET /health`                       | None           | Minimal liveness response   |
+| `GET /api/v1/logs/errors?lines=100` | Bearer token   | Bounded warning/error lines |
+
+`lines` defaults to 100 and must be an integer from 1 through 500. Duplicate
+limits, unknown parameters, paths, source selectors, and expressions are
+rejected. The app never follows logs.
+
+## Security boundaries
+
+- The source, Supervisor host, HTTP method, and path are constants.
+- Caller-controlled URLs, filenames, grep expressions, and shell input do not
+  exist.
+- The protected route is limited to 30 requests per source address per 60
+  seconds.
+- Upstream and downstream responses have strict line, byte, and per-line caps.
+- Supervisor requests time out after 10 seconds.
+- Responses use `Cache-Control: no-store`.
+- The app and gateway redact common authorization values, access tokens,
+  passwords, JWTs, webhook secrets, credential-bearing URLs, and sensitive
+  query parameters.
+- The app has no generic proxy, shell, Docker socket, host network, ingress, or
+  filesystem mounts.
+
+Regex redaction is defense in depth and cannot guarantee removal of every
+secret from arbitrary text. Authentication, fixed scope, small windows,
+severity filtering, response caps, and network isolation are the primary
+disclosure controls.
+
+## Direct companion test
+
+Run this from the trusted Raspberry Pi gateway. The token is entered silently
+and removed from the shell variable afterward:
 
 ```bash
 curl --fail http://<home-assistant-lan-ip>:8099/health
+
 read -rsp 'Diagnostics token: ' DIAGNOSTICS_TEST_TOKEN; echo
-curl --fail-with-body -H 'Authorization: Bearer '$DIAGNOSTICS_TEST_TOKEN \
-  http://<home-assistant-lan-ip>:8099/api/v1/logs/errors?lines=10
+curl --fail-with-body \
+  -H "Authorization: Bearer $DIAGNOSTICS_TEST_TOKEN" \
+  'http://<home-assistant-lan-ip>:8099/api/v1/logs/errors?lines=10'
 unset DIAGNOSTICS_TEST_TOKEN
 ```
 
-Verify status `ok`, bounded warning/error lines with authentication, and 401 without it. Inspect returned logs locally for unexpected sensitive data; do not paste raw logs into issues or chats.
+Expected behavior:
 
-Build this branch in a separate Raspberry Pi test directory and use a separate localhost-only port so production remains untouched. Keep the existing Home Assistant and policy settings, including `READ_ONLY=true`, and add these values to the test deployment's mode-600 `.env`:
+| Test                     | Expected result                                |
+| ------------------------ | ---------------------------------------------- |
+| Health                   | HTTP 200 and `status: ok`                      |
+| Correct token            | HTTP 200 with bounded Core warning/error lines |
+| Missing or wrong token   | HTTP 401                                       |
+| `lines=0` or `lines=501` | HTTP 400                                       |
+
+Inspect returned logs only in a trusted local terminal. Do not paste raw Home
+Assistant logs into chats, issues, or screenshots.
+
+## Connect a separate test gateway
+
+Keep production on `127.0.0.1:8787`. Build this branch in a separate directory
+and run the feature gateway only on `127.0.0.1:8788` with:
 
 ```env
 PORT=8788
 ENABLE_ERROR_LOGS=true
 DIAGNOSTICS_ADDON_URL=http://<home-assistant-lan-ip>:8099
-DIAGNOSTICS_ADDON_TOKEN=<same-new-64-hex-token>
+DIAGNOSTICS_ADDON_TOKEN=<same-dedicated-64-hex-token>
 ```
 
-Bind the test compose port as `127.0.0.1:8788:8788`, build locally, and start only that test project.
+Retain the existing Home Assistant URL, read-only mode, authentication, and
+entity/domain policy. The test deployment must use a mode-600 environment file
+and the Docker port binding `127.0.0.1:8788:8788`.
+
+Test locally:
 
 ```bash
 curl --fail http://127.0.0.1:8788/health
-curl --silent http://127.0.0.1:8788/openapi.json | grep -F /api/v1/logs/errors
+curl --silent http://127.0.0.1:8788/openapi.json \
+  | grep -F /api/v1/logs/errors
+
 read -rsp 'Gateway read key: ' GATEWAY_TEST_KEY; echo
-curl --fail-with-body -H 'Authorization: Bearer '$GATEWAY_TEST_KEY \
-  http://127.0.0.1:8788/api/v1/logs/errors?lines=10
+curl --fail-with-body \
+  -H "Authorization: Bearer $GATEWAY_TEST_KEY" \
+  'http://127.0.0.1:8788/api/v1/logs/errors?lines=10'
 unset GATEWAY_TEST_KEY
 ```
 
-Also verify 401 without the gateway key, 400 for `lines=0` and `lines=501`, and 503 while only the diagnostics app is temporarily offline. Keep the production container and Funnel on `127.0.0.1:8787`; never add port 8099 or the test port to Funnel.
+Also verify HTTP 401 without the gateway key, HTTP 400 for invalid limits, and
+HTTP 503 while only the diagnostics app is temporarily offline.
 
-Afterward, clean up only the separate test project. Disable the app's host port mapping or uninstall the app if it will not be kept. Securely discard test environment copies and retain no historical tokens.
+## Troubleshooting
+
+| Symptom                        | Check                                                                  |
+| ------------------------------ | ---------------------------------------------------------------------- |
+| App immediately stops          | Confirm `diagnostics_token` contains exactly 64 hexadecimal characters |
+| No Save button for port        | Enter `8099` in the empty field to the left of `8099/tcp`              |
+| Health endpoint is unreachable | Confirm the app is running and port 8099 is mapped                     |
+| Protected route returns 401    | Confirm both components use the same dedicated diagnostics token       |
+| Protected route returns 503    | Check that the app is running and Supervisor access is available       |
+| No lines are returned          | The selected recent window may contain no warning/error severity lines |
+| Gateway route is missing       | Set `ENABLE_ERROR_LOGS=true` only on the separate feature gateway      |
+
+## Cleanup after testing
+
+1. Remove the temporary Funnel route, if one was explicitly created.
+2. Stop and remove only the separate gateway test deployment.
+3. Disable the app's host port mapping or stop the app when it is not needed.
+4. Securely remove temporary environment copies and diagnostics tokens.
+5. Confirm production remains healthy on `http://127.0.0.1:8787/health`.
