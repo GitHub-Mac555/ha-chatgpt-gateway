@@ -6,7 +6,8 @@ import { invalidRequest } from '../http/errors.js';
 import { isEntityAllowed } from '../security/authorization.js';
 import { redactSensitive } from '../security/redaction.js';
 
-const MAX_LOGBOOK_DAYS = 7;
+const MAX_UNSCOPED_LOGBOOK_HOURS = 24;
+const MAX_SCOPED_LOGBOOK_DAYS = 7;
 const MAX_LOGBOOK_ENTRIES = 500;
 const logbookQuerySchema = z.object({
   start_time: z.string().datetime({ offset: true }),
@@ -39,17 +40,20 @@ export async function registerLogbookRoutes(
 
       const startTime = new Date(queryResult.data.start_time);
       const endTime = new Date(queryResult.data.end_time ?? new Date().toISOString());
-      if (
-        endTime <= startTime ||
-        endTime.getTime() - startTime.getTime() > MAX_LOGBOOK_DAYS * 86_400_000
-      ) {
+      const requestedEntityId = queryResult.data.entity_id;
+      const maxRangeMs = requestedEntityId
+        ? MAX_SCOPED_LOGBOOK_DAYS * 86_400_000
+        : MAX_UNSCOPED_LOGBOOK_HOURS * 3_600_000;
+
+      if (endTime <= startTime || endTime.getTime() - startTime.getTime() > maxRangeMs) {
         return reply.code(400).send({
           error: 'invalid_request',
-          message: `Logbook ranges must be positive and no longer than ${MAX_LOGBOOK_DAYS} days.`,
+          message: requestedEntityId
+            ? `Entity-scoped logbook ranges must be positive and no longer than ${MAX_SCOPED_LOGBOOK_DAYS} days.`
+            : `Unscoped logbook ranges must be positive and no longer than ${MAX_UNSCOPED_LOGBOOK_HOURS} hours. Use entity_id for longer diagnostic windows.`,
         });
       }
 
-      const requestedEntityId = queryResult.data.entity_id;
       if (requestedEntityId && !isEntityAllowed(config, requestedEntityId)) {
         return reply.code(403).send({ error: 'forbidden', message: 'Entity is not allowed.' });
       }
