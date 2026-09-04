@@ -5,6 +5,7 @@ import type { HomeAssistantClient } from '../home-assistant/client.js';
 import { invalidRequest } from '../http/errors.js';
 import { entityParamsSchema } from '../schemas/entity.js';
 import { getEntityDomain, isEntityAllowed } from '../security/authorization.js';
+import { redactSensitive } from '../security/redaction.js';
 
 const MAX_HISTORY_DAYS = 31;
 
@@ -27,27 +28,6 @@ function toHistoryPoint(value: unknown): Record<string, string> | undefined {
     }
   }
   return typeof result.state === 'string' ? result : undefined;
-}
-
-function redactSensitive(value: unknown, depth = 0): unknown {
-  if (depth > 16) {
-    return '[TRUNCATED]';
-  }
-  if (Array.isArray(value)) {
-    return value.map((item) => redactSensitive(item, depth + 1));
-  }
-  if (!value || typeof value !== 'object') {
-    return value;
-  }
-
-  return Object.fromEntries(
-    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
-      key,
-      /token|secret|password|authorization|api[_-]?key|webhook/i.test(key)
-        ? '[REDACTED]'
-        : redactSensitive(item, depth + 1),
-    ]),
-  );
 }
 
 function samplePoints<T>(points: T[], maxPoints: number): T[] {

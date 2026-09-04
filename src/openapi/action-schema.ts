@@ -16,7 +16,11 @@ const entityIdParameter = {
   schema: { type: 'string', examples: ['light.living_room'] },
 };
 
-export function buildOpenApiSchema(publicBaseUrl?: string) {
+export interface OpenApiFeatureFlags {
+  logbookEnabled?: boolean;
+}
+
+export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeatureFlags = {}) {
   return {
     openapi: '3.1.0',
     info: {
@@ -50,6 +54,60 @@ export function buildOpenApiSchema(publicBaseUrl?: string) {
           responses: { '200': { description: 'Connectivity diagnostics' }, ...errorResponses },
         },
       },
+      ...(features.logbookEnabled
+        ? {
+            '/api/v1/logbook': {
+              get: {
+                operationId: 'getHomeAssistantLogbook',
+                summary: 'Get bounded Home Assistant logbook entries for allowed entities',
+                description:
+                  'Read Home Assistant logbook events for troubleshooting. This source is opt-in, authenticated, rate-limited, limited to 24 hours when unscoped and up to 7 days when scoped to an allowed entity_id, capped at 500 returned entries, filtered by gateway entity policy, redacted as defense-in-depth, and omits state values by default.',
+                parameters: [
+                  {
+                    name: 'start_time',
+                    in: 'query',
+                    required: true,
+                    schema: {
+                      type: 'string',
+                      format: 'date-time',
+                      examples: ['2026-09-01T00:00:00Z'],
+                    },
+                  },
+                  {
+                    name: 'end_time',
+                    in: 'query',
+                    schema: {
+                      type: 'string',
+                      format: 'date-time',
+                      examples: ['2026-09-02T00:00:00Z'],
+                    },
+                  },
+                  {
+                    name: 'entity_id',
+                    in: 'query',
+                    schema: { type: 'string', examples: ['sensor.office_temperature'] },
+                  },
+                  {
+                    name: 'limit',
+                    in: 'query',
+                    schema: { type: 'integer', minimum: 1, maximum: 500, default: 200 },
+                  },
+                  {
+                    name: 'include_state',
+                    in: 'query',
+                    description:
+                      'Include Home Assistant state values in logbook entries. Defaults to false to minimize disclosure of IP addresses, URLs, and other potentially sensitive state data.',
+                    schema: { type: 'boolean', default: false },
+                  },
+                ],
+                responses: {
+                  '200': { description: 'Allowed redacted logbook entries' },
+                  ...errorResponses,
+                },
+              },
+            },
+          }
+        : {}),
       '/api/v1/entities': {
         get: {
           operationId: 'listHomeAssistantEntities',

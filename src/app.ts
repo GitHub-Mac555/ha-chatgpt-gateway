@@ -9,6 +9,7 @@ import { buildOpenApiSchema } from './openapi/action-schema.js';
 import { registerEntityRoutes } from './routes/entities.js';
 import { registerHealthRoute } from './routes/health.js';
 import { registerHistoryRoutes } from './routes/history.js';
+import { registerLogbookRoutes } from './routes/logbook.js';
 import { registerServiceRoutes } from './routes/services.js';
 import { registerSystemRoutes } from './routes/system.js';
 import { createAuthenticationHook } from './security/authentication.js';
@@ -63,13 +64,18 @@ export async function buildApp(options: BuildAppOptions): Promise<FastifyInstanc
 
   await registerHealthRoute(app, options.config);
 
-  app.get('/openapi.json', async () => buildOpenApiSchema(options.config.publicBaseUrl));
+  app.get('/openapi.json', async () =>
+    buildOpenApiSchema(options.config.publicBaseUrl, {
+      logbookEnabled: options.config.logbookEnabled,
+    }),
+  );
 
   await app.register(async (protectedApp) => {
     protectedApp.addHook('onRequest', createRateLimitHook(options.config));
     protectedApp.addHook('onRequest', createAuthenticationHook(options.config));
     await registerEntityRoutes(protectedApp, options.config, client);
     await registerHistoryRoutes(protectedApp, options.config, client);
+    await registerLogbookRoutes(protectedApp, options.config, client);
     await registerServiceRoutes(protectedApp, options.config, client);
     await registerSystemRoutes(protectedApp, options.config, client);
   });

@@ -131,6 +131,14 @@ export class HomeAssistantClient {
     return this.request(`/api/config/automation/config/${encodeURIComponent(automationId)}`);
   }
 
+  async getLogbook(startTime: string, endTime: string, entityId?: string): Promise<unknown> {
+    const query = new URLSearchParams({ end_time: endTime });
+    if (entityId) {
+      query.set('entity', entityId);
+    }
+    return this.request(`/api/logbook/${encodeURIComponent(startTime)}?${query.toString()}`);
+  }
+
   async callService(
     request: ServiceCallRequest,
     timeoutMs = this.config.homeAssistantServiceTimeoutMs,
