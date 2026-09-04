@@ -1,4 +1,4 @@
-![HA ChatGPT Diagnostics](https://raw.githubusercontent.com/GitHub-Mac555/ha-chatgpt-gateway/refs/heads/feature/diagnostics-companion/ha-chatgpt-diagnostics/logo.png)
+![HA ChatGPT Diagnostics](https://raw.githubusercontent.com/GitHub-Mac555/ha-chatgpt-gateway/refs/heads/feature/diagnostics-companion/ha-chatgpt-diagnostics/banner.png)
 
 # HA ChatGPT Diagnostics
 

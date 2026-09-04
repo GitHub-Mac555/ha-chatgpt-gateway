@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7
+
+- Add a dedicated wide banner for the Info and Documentation pages with the
+  excess top and bottom spacing removed.
+
 ## 0.1.6
 
 - Redesign the Documentation page with visual branding, concise tables,
