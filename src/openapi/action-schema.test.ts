@@ -18,5 +18,7 @@ describe('diagnostic OpenAPI feature flags', () => {
     const parameters = logbook && 'get' in logbook ? logbook.get.parameters : [];
     const includeState = parameters?.find((parameter) => parameter.name === 'include_state');
     expect(includeState?.schema).toMatchObject({ type: 'boolean', default: false });
+    expect(logbook && 'get' in logbook ? logbook.get.description : '').toContain('24 hours');
+    expect(logbook && 'get' in logbook ? logbook.get.description : '').toContain('7 days');
   });
 });
