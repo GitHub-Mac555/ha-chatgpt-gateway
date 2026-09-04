@@ -134,13 +134,32 @@ describe('logbook routes', () => {
     await app.close();
   });
 
-  it('rejects ranges longer than seven days and limits above 500', async () => {
+  it('limits unscoped requests to 24 hours but allows entity-scoped requests up to seven days', async () => {
+    const app = Fastify();
+    await registerLogbookRoutes(app, makeConfig(), makeClient([]));
+
+    const unscoped = await app.inject({
+      method: 'GET',
+      url: '/api/v1/logbook?start_time=2026-09-01T00:00:00Z&end_time=2026-09-02T01:00:00Z',
+    });
+    expect(unscoped.statusCode).toBe(400);
+
+    const scoped = await app.inject({
+      method: 'GET',
+      url: '/api/v1/logbook?start_time=2026-08-27T00:00:00Z&end_time=2026-09-02T00:00:00Z&entity_id=sensor.allowed',
+    });
+    expect(scoped.statusCode).toBe(200);
+
+    await app.close();
+  });
+
+  it('rejects entity-scoped ranges longer than seven days and limits above 500', async () => {
     const app = Fastify();
     await registerLogbookRoutes(app, makeConfig(), makeClient([]));
 
     const longRange = await app.inject({
       method: 'GET',
-      url: '/api/v1/logbook?start_time=2026-08-01T00:00:00Z&end_time=2026-09-02T00:00:00Z',
+      url: '/api/v1/logbook?start_time=2026-08-01T00:00:00Z&end_time=2026-09-02T00:00:00Z&entity_id=sensor.allowed',
     });
     expect(longRange.statusCode).toBe(400);
 
