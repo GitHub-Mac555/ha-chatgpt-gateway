@@ -212,6 +212,10 @@ export function createDiagnosticsServer({ diagnosticsToken, supervisorToken, fet
 
 async function main() {
   const options = JSON.parse(await readFile('/data/options.json', 'utf8'));
+  if (typeof process.getuid === 'function' && process.getuid() === 0) {
+    process.setgid('node');
+    process.setuid('node');
+  }
   const server = createDiagnosticsServer({
     diagnosticsToken: options.diagnostics_token,
     supervisorToken: process.env.SUPERVISOR_TOKEN,
@@ -220,10 +224,16 @@ async function main() {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  main().catch(() => {
-    console.error(
-      'Diagnostics companion failed to start. Check its configuration and permissions.',
-    );
+  main().catch((error) => {
+    let category = 'startup_failed';
+    if (error?.code === 'EACCES') category = 'configuration_unreadable';
+    else if (error instanceof SyntaxError) category = 'configuration_invalid_json';
+    else if (error?.message === 'Invalid diagnostics token configuration') {
+      category = 'configuration_invalid_token';
+    } else if (error?.message === 'Supervisor API access is unavailable') {
+      category = 'supervisor_token_unavailable';
+    }
+    console.error(`Diagnostics companion failed to start (${category}).`);
     process.exit(1);
   });
 }

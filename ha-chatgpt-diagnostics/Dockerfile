@@ -12,6 +12,5 @@ LABEL \
 WORKDIR /app
 COPY server.mjs ./server.mjs
 
-USER node
 EXPOSE 8099
 CMD ["node", "server.mjs"]
