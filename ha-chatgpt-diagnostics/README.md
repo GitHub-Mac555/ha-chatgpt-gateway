@@ -17,11 +17,12 @@ ChatGPT → HTTPS → HA ChatGPT Gateway
 ```
 
 - Reads only the fixed Supervisor source `GET /core/logs`.
-- Keeps only warning, error, critical, and fatal lines.
+- Keeps warning, error, critical, and fatal records together with their
+  directly following traceback or continuation lines.
 - Accepts between 1 and 500 recent source lines per request.
 - Applies strict response-size limits, timeouts, rate limits, and redaction.
 - Returns data only through one authenticated, read-only diagnostics endpoint.
-- Produces clear lifecycle logs with local date and time.
+- Produces compact English lifecycle logs with ISO-8601 UTC timestamps.
 
 ## Designed for least exposure
 
@@ -39,10 +40,10 @@ trusted network.
 
 ## Available endpoints
 
-| Endpoint                            | Authentication         | Purpose                          |
-| ----------------------------------- | ---------------------- | -------------------------------- |
-| `GET /health`                       | None                   | Minimal liveness result only     |
-| `GET /api/v1/logs/errors?lines=100` | Dedicated bearer token | Bounded Core warning/error lines |
+| Endpoint                            | Authentication         | Purpose                                                     |
+| ----------------------------------- | ---------------------- | ----------------------------------------------------------- |
+| `GET /health`                       | None                   | Minimal liveness result only                                |
+| `GET /api/v1/logs/errors?lines=100` | Dedicated bearer token | Bounded Core warning/error records and continuation context |
 
 ## Safe defaults
 
@@ -51,6 +52,8 @@ trusted network.
 - Responses use `Cache-Control: no-store`.
 - Tokens, authorization headers, and returned Home Assistant log text are
   never written to the app's own log.
+- Traceback context is subject to the same line, byte, per-line, and redaction
+  bounds as record headers.
 - Regex redaction is defense in depth; fixed scope, authentication, bounds,
   and network isolation remain the primary controls.
 

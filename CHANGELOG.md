@@ -5,10 +5,12 @@
 ### Added
 
 - Adds an optional Home Assistant diagnostics companion and an opt-in gateway route for bounded, redacted Home Assistant Core warning/error lines.
+- Keeps bounded traceback and continuation context with selected warning/error records.
 
 ### Security
 
 - Keeps Supervisor credentials out of the Internet-facing gateway and exposes no generic Supervisor, filesystem, shell, or log-source proxy.
+- Applies the existing redaction and response bounds to every retained traceback line.
 
 ### Fixed
 

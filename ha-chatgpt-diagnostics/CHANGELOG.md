@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.10
+
+- Preserve bounded traceback and continuation context for selected warning,
+  error, critical, and fatal records.
+- Apply redaction and response caps to every retained continuation line.
+- Use compact English lifecycle messages with ISO-8601 UTC timestamps.
+- Keep app-repository publication and maintainership outside this technical
+  feature change.
+
 ## 0.1.9
 
 - Point banner assets to the original upstream project for publication.

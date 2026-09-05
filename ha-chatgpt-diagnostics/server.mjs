@@ -10,11 +10,14 @@ import { pathToFileURL, URL } from 'node:url';
 const DEFAULT_LINES = 100;
 const MAX_LINES = 500;
 const MAX_SUPERVISOR_BYTES = 1024 * 1024;
+const MAX_RESPONSE_BYTES = 1024 * 1024;
 const MAX_LINE_CHARS = 24_576;
 const MAX_REQUESTS = 30;
 const RATE_WINDOW_MS = 60_000;
 const REQUEST_TIMEOUT_MS = 10_000;
-const ERROR_LINE_PATTERN = /\b(?:warning|warn|error|err|critical|fatal)\b/i;
+const LOG_RECORD_PATTERN =
+  /^(?:\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}(?:[.,]\d+)?(?:Z|[+-]\d{2}:?\d{2})?\s+)?\[?(debug|info|notice|warning|warn|error|err|critical|fatal)\]?(?=\s|$)/i;
+const ERROR_LEVELS = new Set(['warning', 'warn', 'error', 'err', 'critical', 'fatal']);
 const APP_VERSION = process.env.APP_VERSION ?? 'development';
 
 const SENSITIVE_TEXT_PATTERNS = [
@@ -27,36 +30,21 @@ const SENSITIVE_TEXT_PATTERNS = [
 ];
 
 export function formatLogEvent(level, event, fields = {}, timestamp = new Date()) {
-  const parts = Object.fromEntries(
-    new Intl.DateTimeFormat('de-DE', {
-      timeZone: 'Europe/Berlin',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hourCycle: 'h23',
-    })
-      .formatToParts(timestamp)
-      .map(({ type, value }) => [type, value]),
-  );
-  const dateAndTime = `${parts.day}.${parts.month}.${parts.year} ${parts.hour}.${parts.minute}.${parts.second}`;
   const messages = {
-    startup_begin: `Neuer App-Start  HA ChatGPT Diagnostics Version ${fields.version}`,
-    configuration_loaded: 'Konfiguration erfolgreich geladen',
-    privileges_dropped: `Rechte abgegeben  UID ${fields.uid}  GID ${fields.gid}`,
-    listening: `API bereit auf Port ${fields.port}`,
-    core_logs_returned: `Core-Logs abgerufen  angefordert ${fields.requested_lines}  zurückgegeben ${fields.returned_lines}`,
-    authentication_failed: 'Zugriff mit fehlendem oder ungültigem Token abgewiesen',
-    request_rate_limited: 'Anfrage wegen Rate-Limit abgewiesen',
-    supervisor_request_failed: 'Supervisor-Anfrage fehlgeschlagen',
-    shutdown_requested: `Beenden angefordert  Signal ${fields.signal}`,
-    shutdown_complete: 'App sauber beendet',
-    shutdown_failed: 'Fehler beim Beenden der App',
-    startup_failed: `Start fehlgeschlagen  Kategorie ${fields.category}`,
+    startup_begin: `Diagnostics app started version=${fields.version}`,
+    configuration_loaded: 'Configuration loaded',
+    privileges_dropped: `Privileges dropped uid=${fields.uid} gid=${fields.gid}`,
+    listening: `Diagnostics API listening host=${fields.host} port=${fields.port}`,
+    core_logs_returned: `Core logs returned requested_lines=${fields.requested_lines} returned_lines=${fields.returned_lines}`,
+    authentication_failed: 'Authentication failed',
+    request_rate_limited: 'Request rate limited',
+    supervisor_request_failed: 'Supervisor request failed',
+    shutdown_requested: `Shutdown requested signal=${fields.signal}`,
+    shutdown_complete: 'Shutdown complete',
+    shutdown_failed: 'Shutdown failed',
+    startup_failed: `Startup failed category=${fields.category}`,
   };
-  return `${dateAndTime} ${level.toUpperCase()} ${messages[event] ?? event}`;
+  return `${timestamp.toISOString()} ${level.toUpperCase()} ${messages[event] ?? event}`;
 }
 
 function logEvent(level, event, fields = {}) {
@@ -116,6 +104,76 @@ async function readTextLimited(response) {
   return Buffer.concat(chunks, size).toString('utf8');
 }
 
+function parseRelevantLogBlocks(rawText) {
+  const lines = rawText.split(/\r?\n/);
+  if (lines.at(-1) === '') lines.pop();
+
+  const blocks = [];
+  let currentBlock;
+  for (const line of lines) {
+    const record = line.match(LOG_RECORD_PATTERN);
+    if (record) {
+      currentBlock = ERROR_LEVELS.has(record[1].toLowerCase()) ? [line] : undefined;
+      if (currentBlock) blocks.push(currentBlock);
+    } else if (currentBlock) {
+      currentBlock.push(line);
+    }
+  }
+  return { blocks, sourceLineCount: lines.length };
+}
+
+function limitBlocksByLines(blocks, lineLimit) {
+  const selected = [];
+  let remaining = lineLimit;
+  let truncated = false;
+
+  for (let index = blocks.length - 1; index >= 0 && remaining > 0; index -= 1) {
+    const block = blocks[index];
+    if (block.length <= remaining) {
+      selected.unshift(block);
+      remaining -= block.length;
+      continue;
+    }
+
+    const partial = remaining === 1 ? [block[0]] : [block[0], ...block.slice(-(remaining - 1))];
+    selected.unshift(partial);
+    remaining = 0;
+    truncated = true;
+  }
+  if (blocks.length > selected.length) truncated = true;
+  return { blocks: selected, truncated };
+}
+
+function buildBoundedResult({ blocks, lines, sourceLineCount, initiallyTruncated }) {
+  const safeBlocks = blocks.map((block) =>
+    block.map((line) => redactSensitiveText(line).slice(0, MAX_LINE_CHARS)),
+  );
+  let truncated = initiallyTruncated;
+
+  const makeResult = () => {
+    const entries = safeBlocks.flat();
+    return {
+      source: 'home_assistant_core',
+      requested_lines: lines,
+      returned_lines: entries.length,
+      truncated,
+      entries,
+    };
+  };
+
+  let result = makeResult();
+  while (Buffer.byteLength(JSON.stringify(result)) > MAX_RESPONSE_BYTES) {
+    truncated = true;
+    if (safeBlocks.length > 1) safeBlocks.shift();
+    else if (safeBlocks[0]?.length > 1) safeBlocks[0].splice(1, 1);
+    else break;
+    result = makeResult();
+  }
+
+  result.truncated = truncated || sourceLineCount >= lines;
+  return result;
+}
+
 export async function fetchCoreErrorLogs({ lines, supervisorToken, fetchImpl = fetch }) {
   const url = new URL('http://supervisor/core/logs');
   url.searchParams.set('lines', String(lines));
@@ -131,20 +189,14 @@ export async function fetchCoreErrorLogs({ lines, supervisorToken, fetchImpl = f
   });
   if (!response.ok) throw new Error('Supervisor log source request failed');
 
-  const rawLines = (await readTextLimited(response)).split(/\r?\n/).filter(Boolean);
-  const entries = rawLines
-    .filter((line) => ERROR_LINE_PATTERN.test(line))
-    .slice(-lines)
-    .map(redactSensitiveText)
-    .map((line) => line.slice(0, MAX_LINE_CHARS));
-
-  return {
-    source: 'home_assistant_core',
-    requested_lines: lines,
-    returned_lines: entries.length,
-    truncated: rawLines.length >= lines,
-    entries,
-  };
+  const { blocks, sourceLineCount } = parseRelevantLogBlocks(await readTextLimited(response));
+  const limited = limitBlocksByLines(blocks, lines);
+  return buildBoundedResult({
+    blocks: limited.blocks,
+    lines,
+    sourceLineCount,
+    initiallyTruncated: limited.truncated,
+  });
 }
 
 export function createDiagnosticsServer({

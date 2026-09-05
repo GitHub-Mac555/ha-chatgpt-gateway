@@ -114,9 +114,9 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
             '/api/v1/logs/errors': {
               get: {
                 operationId: 'getHomeAssistantErrorLogs',
-                summary: 'Get bounded Home Assistant Core warning and error log lines',
+                summary: 'Get bounded Home Assistant Core warning and error records',
                 description:
-                  'Read only Home Assistant Core logs through the optional diagnostics companion. This endpoint is authenticated and rate-limited, accepts 1 to 500 recent source lines, returns only warning and error entries, and applies best-effort secret redaction that cannot guarantee removal of every secret.',
+                  'Read Home Assistant Core warning/error records and bounded traceback context through the optional diagnostics companion. The authenticated, rate-limited endpoint accepts 1 to 500 recent source lines and applies best-effort secret redaction.',
                 parameters: [
                   {
                     name: 'lines',
@@ -127,7 +127,7 @@ export function buildOpenApiSchema(publicBaseUrl?: string, features: OpenApiFeat
                 responses: {
                   ...errorResponses,
                   '200': {
-                    description: 'Redacted Home Assistant Core warning and error lines',
+                    description: 'Redacted Home Assistant Core warning/error records and context',
                     content: {
                       'application/json': {
                         schema: {

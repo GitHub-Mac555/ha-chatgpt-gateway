@@ -11,15 +11,15 @@ normal gateway continues to work when this optional app is absent.
 
 ## At a glance
 
-| Property            | Behavior                                               |
-| ------------------- | ------------------------------------------------------ |
-| Log source          | Home Assistant Core only                               |
-| Included severities | Warning, error, critical, and fatal                    |
-| Request range       | 1–500 recent source lines                              |
-| Authentication      | Dedicated 64-character hexadecimal bearer token        |
-| Network exposure    | Disabled until port 8099 is mapped manually            |
-| Public access       | Never expose the app itself through Funnel or a router |
-| Gateway feature     | Optional and disabled by default                       |
+| Property         | Behavior                                                |
+| ---------------- | ------------------------------------------------------- |
+| Log source       | Home Assistant Core only                                |
+| Included records | Warning, error, critical, and fatal, with continuations |
+| Request range    | 1–500 recent source lines                               |
+| Authentication   | Dedicated 64-character hexadecimal bearer token         |
+| Network exposure | Disabled until port 8099 is mapped manually             |
+| Public access    | Never expose the app itself through Funnel or a router  |
+| Gateway feature  | Optional and disabled by default                        |
 
 ## Architecture
 
@@ -51,25 +51,18 @@ Supervisor role currently exists.
 > compromise of its process or Supervisor token would have a larger impact than
 > its public HTTP API suggests.
 
-## Installation from the original project
+## Local or fork-based installation
 
-The app becomes available from this repository after it has been published by
-the original project.
+This technical feature does not publish the upstream gateway repository as a
+Home Assistant app repository. Test it from a reviewed checkout or fork by
+copying only the `ha-chatgpt-diagnostics` directory to
+`/addons/ha-chatgpt-diagnostics`, then reload the app store and install
+**HA ChatGPT Diagnostics** from the local apps section. Keep protection mode
+enabled.
 
-1. In Home Assistant, open **Settings → Apps → App store**.
-2. Open **⋮ → Repositories**.
-3. Add:
-
-   ```text
-   https://github.com/aferende/ha-chatgpt-gateway
-   ```
-
-4. Find **HA ChatGPT Diagnostics** and install it.
-5. Keep protection mode enabled.
-
-Alternatively, experienced app developers can copy only the
-`ha-chatgpt-diagnostics` directory to `/addons/ha-chatgpt-diagnostics` and
-reload the app store.
+A separately reviewed publication decision can add app-repository metadata
+later. Do not assume that the upstream gateway maintainer also maintains or
+publishes this app.
 
 ## Configuration
 
@@ -108,25 +101,28 @@ private overlay if this is unacceptable.
 Start the app and open **Protocol**. A successful start looks like this:
 
 ```text
-04.09.2026 21.58.14 INFO Neuer App-Start  HA ChatGPT Diagnostics Version 0.1.3
-04.09.2026 21.58.14 INFO Konfiguration erfolgreich geladen
-04.09.2026 21.58.14 INFO Rechte abgegeben  UID 1000  GID 1000
-04.09.2026 21.58.15 INFO API bereit auf Port 8099
+2026-09-05T07:45:12.123Z INFO Diagnostics app started version=0.1.10
+2026-09-05T07:45:12.137Z INFO Configuration loaded
+2026-09-05T07:45:12.140Z INFO Privileges dropped uid=1000 gid=1000
+2026-09-05T07:45:12.168Z INFO Diagnostics API listening host=0.0.0.0 port=8099
 ```
 
 Tokens, authorization headers, and returned Home Assistant log content are
-never written to this protocol.
+never written to this protocol. Lifecycle and result metadata use compact
+English messages with ISO-8601 timestamps in UTC.
 
 ## API reference
 
-| Route                               | Authentication | Result                      |
-| ----------------------------------- | -------------- | --------------------------- |
-| `GET /health`                       | None           | Minimal liveness response   |
-| `GET /api/v1/logs/errors?lines=100` | Bearer token   | Bounded warning/error lines |
+| Route                               | Authentication | Result                                                  |
+| ----------------------------------- | -------------- | ------------------------------------------------------- |
+| `GET /health`                       | None           | Minimal liveness response                               |
+| `GET /api/v1/logs/errors?lines=100` | Bearer token   | Bounded warning/error records with continuation context |
 
 `lines` defaults to 100 and must be an integer from 1 through 500. Duplicate
 limits, unknown parameters, paths, source selectors, and expressions are
-rejected. The app never follows logs.
+rejected. The app never follows logs. Directly following traceback and other
+continuation lines remain attached to a selected warning/error record until a
+new log record begins. A new info/debug record is not included.
 
 ## Security boundaries
 
@@ -143,6 +139,11 @@ rejected. The app never follows logs.
   query parameters.
 - The app has no generic proxy, shell, Docker socket, host network, ingress, or
   filesystem mounts.
+
+Tracebacks can contain more sensitive context than a single record header.
+Every retained continuation line is therefore redacted before return and
+remains subject to the same line, per-line, and total-response byte caps. An
+oversized record is truncated without bypassing those limits.
 
 Regex redaction is defense in depth and cannot guarantee removal of every
 secret from arbitrary text. Authentication, fixed scope, small windows,
@@ -166,12 +167,12 @@ unset DIAGNOSTICS_TEST_TOKEN
 
 Expected behavior:
 
-| Test                     | Expected result                                |
-| ------------------------ | ---------------------------------------------- |
-| Health                   | HTTP 200 and `status: ok`                      |
-| Correct token            | HTTP 200 with bounded Core warning/error lines |
-| Missing or wrong token   | HTTP 401                                       |
-| `lines=0` or `lines=501` | HTTP 400                                       |
+| Test                     | Expected result                                              |
+| ------------------------ | ------------------------------------------------------------ |
+| Health                   | HTTP 200 and `status: ok`                                    |
+| Correct token            | HTTP 200 with bounded Core warning/error records and context |
+| Missing or wrong token   | HTTP 401                                                     |
+| `lines=0` or `lines=501` | HTTP 400                                                     |
 
 Inspect returned logs only in a trusted local terminal. Do not paste raw Home
 Assistant logs into chats, issues, or screenshots.
@@ -218,7 +219,7 @@ HTTP 503 while only the diagnostics app is temporarily offline.
 | Health endpoint is unreachable | Confirm the app is running and port 8099 is mapped                     |
 | Protected route returns 401    | Confirm both components use the same dedicated diagnostics token       |
 | Protected route returns 503    | Check that the app is running and Supervisor access is available       |
-| No lines are returned          | The selected recent window may contain no warning/error severity lines |
+| No lines are returned          | The selected recent window may contain no warning/error records        |
 | Gateway route is missing       | Set `ENABLE_ERROR_LOGS=true` only on the separate feature gateway      |
 
 ## Cleanup after testing

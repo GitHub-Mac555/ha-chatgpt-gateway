@@ -303,7 +303,7 @@ Set `include_state=true` only when state values are required for the specific di
 
 ## Error-log diagnostics companion
 
-Home Assistant Core logs are deliberately not fetched by the normal gateway. The optional companion app runs under Home Assistant Supervisor and exposes one authenticated operation: a bounded excerpt of recent Core warning/error lines. It has no generic proxy, source selector, shell, Docker socket, or filesystem mount.
+Home Assistant Core logs are deliberately not fetched by the normal gateway. The optional companion app runs under Home Assistant Supervisor and exposes one authenticated operation: a bounded excerpt of recent Core warning/error records, including directly following traceback or continuation lines. It has no generic proxy, source selector, shell, Docker socket, or filesystem mount.
 
 The gateway route is absent from both runtime routing and OpenAPI unless all three settings are valid:
 
@@ -313,7 +313,7 @@ DIAGNOSTICS_ADDON_URL=http://homeassistant.local:8099
 DIAGNOSTICS_ADDON_TOKEN=<64-hex-token-shared-with-the-companion>
 ```
 
-`GET /api/v1/logs/errors?lines=100` accepts `1..500`; `100` is the default. It selects only warning/error-severity lines from the requested recent Core-log window. Both components apply best-effort redaction, but regex redaction cannot guarantee removal of every secret. Keep windows small and do not expose the companion port to the Internet or through the gateway's Tailscale Funnel.
+`GET /api/v1/logs/errors?lines=100` accepts `1..500`; `100` is the default. It selects warning/error/critical/fatal records and retains their bounded continuation context until a new log record begins. Every retained line is redacted and subject to line, per-line, and response-byte caps. Regex redaction cannot guarantee removal of every secret and remains defense in depth. Keep windows small and never expose the companion through Home Assistant ingress, a router, the Internet, or the gateway's Tailscale Funnel.
 
 Installation, permissions, network guidance, threat model, and a local test procedure are in [the diagnostics companion guide](ha-chatgpt-diagnostics/DOCS.md).
 
