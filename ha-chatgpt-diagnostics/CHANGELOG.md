@@ -6,8 +6,8 @@
   error, critical, and fatal records.
 - Apply redaction and response caps to every retained continuation line.
 - Use compact English lifecycle messages with ISO-8601 UTC timestamps.
-- Keep app-repository publication and maintainership outside this technical
-  feature change.
+- Provide the repository metadata required for App Store installation without
+  assigning an upstream app maintainer.
 
 ## 0.1.9
 

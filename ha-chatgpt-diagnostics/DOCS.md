@@ -51,18 +51,28 @@ Supervisor role currently exists.
 > compromise of its process or Supervisor token would have a larger impact than
 > its public HTTP API suggests.
 
-## Local or fork-based installation
+## Installation
 
-This technical feature does not publish the upstream gateway repository as a
-Home Assistant app repository. Test it from a reviewed checkout or fork by
-copying only the `ha-chatgpt-diagnostics` directory to
-`/addons/ha-chatgpt-diagnostics`, then reload the app store and install
-**HA ChatGPT Diagnostics** from the local apps section. Keep protection mode
-enabled.
+During review, add the feature fork to **Settings → Apps → App store → ⋮ →
+Repositories**:
 
-A separately reviewed publication decision can add app-repository metadata
-later. Do not assume that the upstream gateway maintainer also maintains or
-publishes this app.
+```text
+https://github.com/GitHub-Mac555/ha-chatgpt-gateway
+```
+
+After upstream publication, use the original project instead:
+
+```text
+https://github.com/aferende/ha-chatgpt-gateway
+```
+
+The repository metadata deliberately does not assign an app maintainer. A
+maintainer and long-term publication process remain decisions for the upstream
+project owner.
+
+For local testing, copy only the `ha-chatgpt-diagnostics` directory to
+`/addons/ha-chatgpt-diagnostics` and reload the app store. In every installation
+mode, keep protection mode enabled.
 
 ## Configuration
 
